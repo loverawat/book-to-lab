@@ -9,6 +9,49 @@ async function api(path, opts) {
   return res.json();
 }
 
+const INDENT = "    "; // 4 spaces, matches generated starter_code/reference_solution
+
+// Minimal code-editing affordances for a plain <textarea>: Tab inserts an
+// indent instead of moving focus, Shift+Tab removes one, Enter continues
+// the previous line's indentation (plus one more level after a trailing
+// ":"). Deliberately not a real editor (no highlighting/bracket matching) -
+// see CLAUDE.md for why: this covers what was actually asked for at zero
+// added weight, a real editor library would need vendoring or a CDN.
+function enableCodeEditing(id) {
+  const el = $(id);
+  el.addEventListener("keydown", (e) => {
+    if (e.key === "Tab") {
+      e.preventDefault();
+      const { value, selectionStart: start, selectionEnd: end } = el;
+      if (e.shiftKey) {
+        const lineStart = value.lastIndexOf("\n", start - 1) + 1;
+        const match = value.slice(lineStart, start).match(/^( {1,4}|\t)/);
+        if (match) {
+          el.value = value.slice(0, lineStart) + value.slice(lineStart + match[0].length);
+          el.selectionStart = el.selectionEnd = start - match[0].length;
+        }
+      } else {
+        el.value = value.slice(0, start) + INDENT + value.slice(end);
+        el.selectionStart = el.selectionEnd = start + INDENT.length;
+      }
+      el.dispatchEvent(new Event("input"));
+      return;
+    }
+    if (e.key === "Enter") {
+      e.preventDefault();
+      const { value, selectionStart: start, selectionEnd: end } = el;
+      const lineStart = value.lastIndexOf("\n", start - 1) + 1;
+      const line = value.slice(lineStart, start);
+      let indent = (line.match(/^\s*/) || [""])[0];
+      if (line.trim().endsWith(":")) indent += INDENT;
+      const insertion = "\n" + indent;
+      el.value = value.slice(0, start) + insertion + value.slice(end);
+      el.selectionStart = el.selectionEnd = start + insertion.length;
+      el.dispatchEvent(new Event("input"));
+    }
+  });
+}
+
 function orderedBlobs() {
   const out = [];
   for (const chapter of CONTENT.chapters) {
@@ -442,6 +485,10 @@ function renderGraphNode(node, isRoot) {
   }
   return div;
 }
+
+enableCodeEditing("code-input");
+enableCodeEditing("review-code-input");
+enableCodeEditing("synthesis-code-input");
 
 refreshContent();
 checkReviewDue();
