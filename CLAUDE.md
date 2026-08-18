@@ -163,18 +163,30 @@ field, add a `check` line for it in the same script rather than only
 testing it manually.
 
 For a full pipeline sanity check (epub → markdown → media → app,
-without needing a real book on hand), use the tiny public-domain demo:
+without needing a real book on hand), use one of the two hand-built,
+self-authored, public-domain demo epubs — kept deliberately small so
+they cost nothing to keep in git history:
 
 ```bash
 python3 scripts/convert_epub.py demo/tiny-demo-book.epub /tmp/demo-out
+python3 scripts/convert_epub.py demo/number-theory-demo-book.epub /tmp/demo-out-2
 ```
 
-`demo/tiny-demo-book.epub` is a hand-built, self-authored 3-chapter/
-1-image epub (~3KB) — kept deliberately tiny so it costs nothing to keep
-in git history. It exists purely to exercise the converter (spine
-order, chapter naming, image extraction/link-rewriting); it was never
-run through phase 2 (content generation), so there's no matching
-`content.json` for it.
+`demo/tiny-demo-book.epub` (~3KB, 3 chapters/1 image, fables) exists
+purely to exercise the converter (spine order, chapter naming, image
+extraction/link-rewriting) — quick and disposable.
+
+`demo/number-theory-demo-book.epub` (~7KB, 6 sections across 2
+chapters/1 image, GCD+Euclidean algorithm+primes+modular exponentiation)
+has enough real math/code content to be worth actually running through
+phase 2 generation when testing generation-time changes (chunking,
+exercise generation, prerequisites) or the runtime features that need
+multiple related concepts to be meaningful (synthesis challenges, the
+knowledge graph, dynamic review variants) — the 3-blob tiny-algorithms
+`example_content.json` used by `test_engine.sh` is deliberately too
+minimal for that. Neither demo's generated `content.json` is committed
+here (see the repo-scope note above) — generate it fresh into a scratch
+`output_dir` when you need it for manual testing.
 
 `content.json` and `progress.json` under `app-engine/content/` are
 gitignored on purpose — if `git status` ever shows them as untracked
@@ -200,6 +212,7 @@ LICENSE                           MIT
 scripts/convert_epub.py           epub -> markdown + media (spine order, pandoc)
 scripts/test_engine.sh            automated regression check for server.py
 demo/tiny-demo-book.epub          tiny self-authored PD epub, for pipeline sanity checks
+demo/number-theory-demo-book.epub bigger self-authored PD epub (math+code), for generation/feature testing
 app-engine/server.py              generic server: content, submit, hint, review, graph, progress
 app-engine/static/                generic frontend (index.html, app.js, style.css)
 app-engine/content/SCHEMA.md      content.json spec

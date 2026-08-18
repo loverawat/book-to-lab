@@ -168,14 +168,23 @@ nothing global ever gets touched.
 and checks gating, grading, hints, the knowledge graph, and static
 serving all still work - run it after any change to `server.py`.
 
-`demo/tiny-demo-book.epub` is a tiny (~3KB), self-authored,
-public-domain 3-chapter epub with one image, used to sanity-check the
+Two self-authored, public-domain demo epubs let you sanity-check the
 epub -> markdown + media conversion pipeline without needing a real
 book on hand:
 
 ```bash
 python3 scripts/convert_epub.py demo/tiny-demo-book.epub /tmp/demo-out
+python3 scripts/convert_epub.py demo/number-theory-demo-book.epub /tmp/demo-out-2
 ```
+
+- `demo/tiny-demo-book.epub` (~3KB) - 3 short fables, one image. Good
+  for a quick pipeline check.
+- `demo/number-theory-demo-book.epub` (~7KB) - 6 sections across 2
+  chapters on GCD/the Euclidean algorithm and primes/modular
+  arithmetic, one image. Enough real math+code content to actually run
+  through phase 2 generation and exercise the richer features (the
+  prerequisite graph, synthesis challenges across concepts, dynamic
+  review variants) rather than just testing the converter.
 
 ## License
 
