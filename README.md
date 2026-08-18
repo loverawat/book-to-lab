@@ -80,12 +80,28 @@ In a Claude Code session:
 > use the book-to-lab skill on ~/Books/some-book.epub
 ```
 
+Or run it directly from a terminal, without opening a session first -
+this starts Claude Code pre-loaded with that instruction:
+
+```bash
+claude "use the book-to-lab skill on ~/Books/some-book.epub"
+```
+
+Either way works from any directory - skills in `~/.claude/skills/` are
+discovered globally, not tied to a project folder.
+
 By default everything for that book (converted markdown, media, and the
 generated app) lands in `~/BookLabs/<book-slug>/`. To put it somewhere
 else instead, just say so:
 
 ```
 > use the book-to-lab skill on ~/Books/some-book.epub, output to ~/Desktop/my-book-lab
+```
+
+or from the terminal:
+
+```bash
+claude "use the book-to-lab skill on ~/Books/some-book.epub, output to ~/Desktop/my-book-lab"
 ```
 
 Claude will convert the book, generate the exercises chapter by chapter
