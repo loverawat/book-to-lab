@@ -111,3 +111,22 @@ cd ~/BookLabs/<book-slug>/app && python3 server.py
 - **Copyright** - `~/BookLabs/<book-slug>/` contains the book's actual
   converted text. Keep that private; this repo (the skill itself) never
   contains book content, so it's fine to keep public.
+
+## Testing changes
+
+`scripts/test_engine.sh` runs the app engine against a worked example
+and checks gating, grading, hints, the knowledge graph, and static
+serving all still work - run it after any change to `server.py`.
+
+`demo/tiny-demo-book.epub` is a tiny (~3KB), self-authored,
+public-domain 3-chapter epub with one image, used to sanity-check the
+epub -> markdown + media conversion pipeline without needing a real
+book on hand:
+
+```bash
+python3 scripts/convert_epub.py demo/tiny-demo-book.epub /tmp/demo-out
+```
+
+## License
+
+MIT - see `LICENSE`.

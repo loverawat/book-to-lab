@@ -86,18 +86,33 @@ symlinked into `~/.claude/skills/book-to-lab` for discovery. Remote:
 
 ## Dev workflow
 
-There's no test suite yet — verify changes by actually running the
-engine against the worked example before committing:
+Run `scripts/test_engine.sh` after touching `server.py` before
+committing — it spins up the engine against `example_content.json`,
+exercises every endpoint (gating, submit pass/fail, locked-blob
+rejection, hints, graph traversal, self-assessment, static serving),
+asserts the responses, and tears itself down:
 
 ```bash
-cd app-engine
-cp content/example_content.json content/content.json
-python3 server.py 8420 &
-curl -s http://127.0.0.1:8420/api/content | python3 -m json.tool
-# ... exercise whatever endpoint you changed ...
-kill %1
-rm -f content/content.json content/progress.json   # never commit these
+scripts/test_engine.sh
 ```
+
+It's a regression check, not exhaustive — if you add a new endpoint or
+field, add a `check` line for it in the same script rather than only
+testing it manually.
+
+For a full pipeline sanity check (epub → markdown → media → app,
+without needing a real book on hand), use the tiny public-domain demo:
+
+```bash
+python3 scripts/convert_epub.py demo/tiny-demo-book.epub /tmp/demo-out
+```
+
+`demo/tiny-demo-book.epub` is a hand-built, self-authored 3-chapter/
+1-image epub (~3KB) — kept deliberately tiny so it costs nothing to keep
+in git history. It exists purely to exercise the converter (spine
+order, chapter naming, image extraction/link-rewriting); it was never
+run through phase 2 (content generation), so there's no matching
+`content.json` for it.
 
 `content.json` and `progress.json` under `app-engine/content/` are
 gitignored on purpose — if `git status` ever shows them as untracked
@@ -119,9 +134,12 @@ they'll drift out of sync:
 ```
 SKILL.md                          workflow Claude follows per-book
 README.md                         user-facing docs
+LICENSE                           MIT
 scripts/convert_epub.py           epub -> markdown + media (spine order, pandoc)
+scripts/test_engine.sh            automated regression check for server.py
+demo/tiny-demo-book.epub          tiny self-authored PD epub, for pipeline sanity checks
 app-engine/server.py              generic server: content, submit, hint, review, graph, progress
 app-engine/static/                generic frontend (index.html, app.js, style.css)
 app-engine/content/SCHEMA.md      content.json spec
-app-engine/content/example_content.json   worked 3-blob example (also used for manual testing)
+app-engine/content/example_content.json   worked 3-blob example (used by test_engine.sh)
 ```
