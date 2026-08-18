@@ -20,8 +20,9 @@ implementation-first learning web app. Two moving parts:
 
 Generated book output (converted markdown + that book's copy of the app,
 filled with real `content.json`) never lives in this repo — it goes to
-`~/BookLabs/<book-slug>/` on whatever machine ran the skill. This repo
-stays free of copyrighted book text, which is why it's public.
+an `output_dir`, which defaults to `~/BookLabs/<book-slug>/` but can be
+overridden per-invocation (see "Inputs" in `SKILL.md`). This repo stays
+free of copyrighted book text, which is why it's public.
 
 This repo lives at `~/Documents/created_skills/book-to-lab` and is
 symlinked into `~/.claude/skills/book-to-lab` for discovery. Remote:

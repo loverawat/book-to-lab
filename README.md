@@ -80,6 +80,14 @@ In a Claude Code session:
 > use the book-to-lab skill on ~/Books/some-book.epub
 ```
 
+By default everything for that book (converted markdown, media, and the
+generated app) lands in `~/BookLabs/<book-slug>/`. To put it somewhere
+else instead, just say so:
+
+```
+> use the book-to-lab skill on ~/Books/some-book.epub, output to ~/Desktop/my-book-lab
+```
+
 Claude will convert the book, generate the exercises chapter by chapter
 (this is the slow part for a long book - it's real reading + exercise
 design, not a script), then start the local server and give you a URL
@@ -89,7 +97,7 @@ To reopen a book you've already generated, you don't need the skill
 again - just run its app directly:
 
 ```bash
-cd ~/BookLabs/<book-slug>/app && python3 server.py
+cd <output_dir>/app && python3 server.py
 ```
 
 ## Adapting it to your own use case

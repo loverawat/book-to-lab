@@ -1,6 +1,6 @@
 ---
 name: book-to-lab
-description: Converts an epub book into an implementation-focused local learning web app - reading is chunked into small concepts, each paired with a hands-on exercise, gated progression, progressive hints, spaced review, and a prerequisite knowledge graph. Use when the user gives an epub and wants to learn it by building instead of just reading.
+description: Converts an epub book into an implementation-focused local learning web app - reading is chunked into small concepts, each paired with a hands-on exercise, gated progression, progressive hints, spaced review, and a prerequisite knowledge graph. Takes the epub path and an optional output folder (defaults to ~/BookLabs/<book-slug>/). Use when the user gives an epub and wants to learn it by building instead of just reading.
 ---
 
 # book-to-lab
@@ -13,14 +13,24 @@ can do this part - it's genuine reading comprehension and exercise design).
 ## Inputs
 
 - `epub_path`: path to the source `.epub` file (ask the user if not given).
+- `output_dir` (optional): where to put everything for this book - the
+  converted markdown, media, and the generated app. If the user doesn't
+  give one, default to `~/BookLabs/<book-slug>/`, where `<book-slug>` is
+  a kebab-case slug of the book title (e.g. "Deep Learning with Python"
+  -> `deep-learning-with-python`). If they do give one, use it exactly
+  as given - don't nest it under `~/BookLabs/` or append a slug, since
+  they've already told you where they want it.
+
+Resolve `<output_dir>` once at the start (default or user-given) and use
+that same path through every phase below - it's referred to as
+`<output_dir>` for the rest of this document.
 
 ## Output location
 
-Everything for this book goes in `~/BookLabs/<book-slug>/`, regardless of
-where the source epub lives:
+Everything for this book goes in `<output_dir>`:
 
 ```
-~/BookLabs/<book-slug>/
+<output_dir>/
 ├── markdown/            # converted chapters, one file per chapter
 ├── media/                # extracted images, flat
 ├── manifest.json         # title, author, ordered chapter list
@@ -31,13 +41,10 @@ where the source epub lives:
         └── content.json    # THIS is what you generate - see below
 ```
 
-`<book-slug>` is a kebab-case slug of the book title (e.g. "Deep Learning
-with Python" -> `deep-learning-with-python`).
-
 ## Phase 1 - Conversion (mechanical, use the script)
 
 ```bash
-python3 <skill_dir>/scripts/convert_epub.py <epub_path> ~/BookLabs/<book-slug>
+python3 <skill_dir>/scripts/convert_epub.py <epub_path> <output_dir>
 ```
 
 This unzips the epub, walks its spine (real reading order from the epub's
@@ -59,13 +66,13 @@ content.
 Set up the app skeleton first:
 
 ```bash
-mkdir -p ~/BookLabs/<book-slug>/app/content
-cp <skill_dir>/app-engine/server.py ~/BookLabs/<book-slug>/app/server.py
-cp -r <skill_dir>/app-engine/static ~/BookLabs/<book-slug>/app/static
+mkdir -p <output_dir>/app/content
+cp <skill_dir>/app-engine/server.py <output_dir>/app/server.py
+cp -r <skill_dir>/app-engine/static <output_dir>/app/static
 ```
 
 Then, **process the book chapter by chapter**, writing to
-`~/BookLabs/<book-slug>/app/content/content.json` incrementally (read the
+`<output_dir>/app/content/content.json` incrementally (read the
 existing file, append, write back) rather than holding the whole book's
 generated content in context at once - books are long, and this keeps
 each step tractable and lets you resume if interrupted.
@@ -142,7 +149,7 @@ well-formed JSON before moving to the next chapter.
 ## Phase 3 - Run it
 
 ```bash
-cd ~/BookLabs/<book-slug>/app && python3 server.py
+cd <output_dir>/app && python3 server.py
 ```
 
 Report the local URL (default `http://127.0.0.1:8420`) to the user. The
