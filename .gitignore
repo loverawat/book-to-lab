@@ -1,5 +1,23 @@
-__pycache__/
-*.pyc
-.DS_Store
+# book-generated content (this repo is the skill, not any book's output)
 app-engine/content/content.json
 app-engine/content/progress.json
+
+# python
+__pycache__/
+*.pyc
+.venv/
+venv/
+.pytest_cache/
+
+# node (only relevant if you touch the frontend with tooling)
+node_modules/
+
+# editor / OS
+.DS_Store
+.vscode/
+.idea/
+*.swp
+
+# local secrets, should never be committed
+.env
+.env.*
