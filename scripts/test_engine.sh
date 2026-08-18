@@ -107,6 +107,17 @@ resp=$(curl -s "$BASE/api/content")
 check "reset clears passed status" '"ch01-b01": {"status": "available"' "$resp"
 check "reset relocks later blobs" '"ch01-b03": {"status": "locked"' "$resp"
 
+# 11. shutdown responds first, then the process actually exits shortly after
+resp=$(curl -s -X POST "$BASE/api/shutdown")
+check "shutdown accepted" '"ok": true' "$resp"
+sleep 1
+if curl -s -o /dev/null --max-time 1 "$BASE/api/content"; then
+  echo "FAIL - server still responding after shutdown"
+  FAIL=1
+else
+  echo "ok   - server process exited after shutdown"
+fi
+
 if [[ "$FAIL" -eq 0 ]]; then
   echo
   echo "All checks passed."

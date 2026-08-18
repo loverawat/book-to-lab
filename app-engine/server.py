@@ -25,6 +25,7 @@ import subprocess
 import sys
 import tempfile
 import textwrap
+import threading
 import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -77,6 +78,11 @@ def load_progress():
 
 def save_progress(progress):
     PROGRESS_PATH.write_text(json.dumps(progress, indent=2), encoding="utf-8")
+
+
+def _delayed_exit():
+    time.sleep(0.3)
+    os._exit(0)
 
 
 def all_blobs(content):
@@ -367,6 +373,15 @@ class Handler(BaseHTTPRequestHandler):
         if parsed.path == "/api/reset":
             PROGRESS_PATH.unlink(missing_ok=True)
             self._json({"ok": True})
+            return
+
+        if parsed.path == "/api/shutdown":
+            self._json({"ok": True})
+            # Respond first, then exit shortly after on a separate thread -
+            # calling shutdown()/exit() inline here would kill the response
+            # we're still writing. Progress is already durable (written to
+            # disk on every change), so an abrupt exit loses nothing.
+            threading.Thread(target=_delayed_exit, daemon=True).start()
             return
 
         if parsed.path == "/api/hint":

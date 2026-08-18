@@ -253,6 +253,14 @@ $("reset-progress-btn").onclick = async () => {
   await refreshContent();
 };
 
+$("shutdown-btn").onclick = async () => {
+  const ok = confirm("Shut down the server? You'll need to run python3 server.py again to reopen this book.");
+  if (!ok) return;
+  await api("/api/shutdown", { method: "POST" });
+  $("app").classList.add("hidden");
+  $("shutdown-overlay").classList.remove("hidden");
+};
+
 $("show-graph-btn").onclick = async () => {
   const data = await api(`/api/graph?blob_id=${encodeURIComponent(CURRENT_BLOB_ID)}&depth=4`);
   const container = $("graph-tree");

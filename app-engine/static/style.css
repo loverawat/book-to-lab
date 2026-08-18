@@ -70,7 +70,8 @@ body {
 .status-passed { background: var(--pass); }
 .status-skipped { background: var(--skipped); }
 
-#reset-progress-btn {
+#sidebar-footer { margin-top: 16px; display: flex; flex-direction: column; gap: 6px; }
+#reset-progress-btn, #shutdown-btn {
   font: inherit;
   border: 1px solid var(--border);
   background: transparent;
@@ -79,10 +80,29 @@ body {
   border-radius: 6px;
   cursor: pointer;
   font-size: 12px;
-  margin-top: 16px;
   width: 100%;
 }
-#reset-progress-btn:hover { color: var(--fail); border-color: var(--fail); }
+#reset-progress-btn:hover, #shutdown-btn:hover { color: var(--fail); border-color: var(--fail); }
+
+#shutdown-overlay {
+  position: fixed;
+  inset: 0;
+  background: var(--bg);
+  color: var(--text);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  text-align: center;
+  padding: 24px;
+}
+#shutdown-overlay code {
+  background: var(--bg-alt);
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-family: ui-monospace, monospace;
+}
 
 #content-pane { flex: 1; padding: 32px; max-width: 780px; margin: 0 auto; }
 #review-banner {

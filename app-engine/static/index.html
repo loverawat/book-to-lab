@@ -11,7 +11,10 @@
       <div id="book-title"></div>
       <div id="progress-bar"><div id="progress-fill"></div></div>
       <div id="chapter-list"></div>
-      <button id="reset-progress-btn">Reset progress</button>
+      <div id="sidebar-footer">
+        <button id="reset-progress-btn">Reset progress</button>
+        <button id="shutdown-btn">Shut down server</button>
+      </div>
     </aside>
     <main id="content-pane">
       <div id="review-banner" class="hidden">
@@ -68,6 +71,11 @@
       <h3>Prerequisite knowledge graph</h3>
       <div id="graph-tree"></div>
     </div>
+  </div>
+
+  <div id="shutdown-overlay" class="hidden">
+    <p>Server stopped. Your progress was saved.</p>
+    <p>To come back, run <code>python3 server.py</code> in this book's <code>app/</code> folder again, then reload this page.</p>
   </div>
 
   <script src="app.js"></script>
