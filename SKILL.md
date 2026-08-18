@@ -90,14 +90,27 @@ unique `id` (e.g. `ch03-b02`).
 
 ### 2. Decide exercise type per blob
 
-Default to **implementation**. A blob's exercise is `short_answer` only
-when forcing code would be artificial busywork - e.g. a pure design
-tradeoff, a historical/motivational aside, a comparison of approaches
-with no natural artifact to build. When in doubt, try harder to find an
-implementation framing first (e.g. "implement both approaches and show
-where they diverge" is usually possible even for tradeoff discussions).
-When you do use `short_answer`, prefer an applied/scenario question over
-pure recall.
+Default to **implementation**. A blob's exercise is `short_answer` when
+forcing code would be artificial busywork - e.g. a pure design tradeoff,
+a historical/motivational aside, a comparison of approaches with no
+natural artifact to build - **or** when the concept is fundamentally
+about interpretation rather than computation: what a result *means*, why
+it's true, what it looks like geometrically, what breaks if a condition
+fails. A blob can usually be *implemented* (compute the dot product,
+multiply the matrices) without that exercise ever testing whether the
+learner understands what the computed thing represents - e.g. "implement
+the dot product" tells you nothing about whether the learner knows a
+zero result means orthogonality, or why a zero determinant means no
+unique solution. Don't force those into code just because a plausible
+function signature exists; use `short_answer` (teach-back framing, see
+below) instead. When in doubt between the two, ask: does passing this
+exercise actually require understanding the interpretation, or just
+transcribing a formula? If the latter, prefer `short_answer`. This
+matters most in math-heavy books, where most concepts have *both* a
+computational side and an interpretive side - don't let every blob in
+such a book default to implementation just because each one technically
+has a formula to code. When you do use `short_answer`, prefer an
+applied/scenario question over pure recall.
 
 ### 3. Write the exercise, grounded strictly in this book
 

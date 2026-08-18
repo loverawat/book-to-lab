@@ -116,13 +116,26 @@ body {
   justify-content: space-between;
   align-items: center;
 }
+#checkpoint-nudge {
+  background: var(--bg-alt);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 10px 14px;
+  margin-bottom: 10px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+}
+#checkpoint-nudge-text { color: var(--text-dim); font-size: 13px; }
 #reading-text { line-height: 1.6; }
 #reading-text pre { background: var(--bg-alt); padding: 10px; border-radius: 6px; overflow-x: auto; }
 #reading-text img { max-width: 100%; }
 #show-graph-btn, #hint-btn, #reveal-btn, #claude-review-btn, #run-btn,
 #next-btn, #reveal-answer-btn, #got-it-btn, #missed-it-btn, #graph-close-btn,
 #review-banner-go, #skip-btn, #grade-answer-btn, #submit-follow-up-btn,
-#review-submit-btn, #synthesis-submit-btn, #review-close-btn, #synthesis-close-btn {
+#review-submit-btn, #synthesis-submit-btn, #review-close-btn, #synthesis-close-btn,
+#checkpoint-nudge-btn {
   font: inherit;
   border: 1px solid var(--border);
   background: var(--bg-alt);

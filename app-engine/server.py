@@ -170,6 +170,28 @@ def due_review_blob(content, progress):
     return candidates[0][1]
 
 
+def apply_synthesis_result(blob_ids, passed):
+    """Synthesis questions are optional and never gate progress or move a
+    blob's own Leitner box - failing to combine several concepts together
+    is weaker evidence against any single one of them than missing a
+    review question aimed directly at it. But it shouldn't be a no-op
+    either: on failure, pull each component blob's next review forward to
+    immediately due (last_reviewed reset, box left alone) so struggling to
+    synthesize still feeds back into what gets resurfaced, just more
+    gently than a direct miss (which resets the box too)."""
+    if passed or not blob_ids:
+        return
+    progress = load_progress()
+    changed = False
+    for blob_id in blob_ids:
+        state = progress["blobs"].get(blob_id)
+        if state is not None:
+            state["last_reviewed"] = 0
+            changed = True
+    if changed:
+        save_progress(progress)
+
+
 def recent_passed_blobs(content, progress, n=3):
     passed = [
         (progress["blobs"][bid].get("last_reviewed", 0), bid)
@@ -475,6 +497,7 @@ class Handler(BaseHTTPRequestHandler):
                 return
             challenge_id = str(time.time_ns())
             result["_excerpt"] = "\n\n".join(f"[{c}]\n{t}" for c, t in excerpts)
+            result["_blob_ids"] = blob_ids
             SYNTHESIS_CHALLENGES[challenge_id] = result
             self._json({"challenge_id": challenge_id, "concepts": concepts, "challenge": result})
             return
@@ -713,6 +736,7 @@ class Handler(BaseHTTPRequestHandler):
                 passed, output = run_code_test(
                     content.get("language", "python"), body.get("code", ""), challenge["test_code"]
                 )
+                apply_synthesis_result(challenge.get("_blob_ids", []), passed)
                 self._json({"passed": passed, "output": output})
             else:
                 prompt = build_grading_prompt(
@@ -724,7 +748,9 @@ class Handler(BaseHTTPRequestHandler):
                 if result is None:
                     self._json({"error": error or "grading failed"}, 502)
                     return
-                self._json({"passed": result.get("verdict") == "correct", "feedback": result.get("feedback", "")})
+                passed = result.get("verdict") == "correct"
+                apply_synthesis_result(challenge.get("_blob_ids", []), passed)
+                self._json({"passed": passed, "feedback": result.get("feedback", "")})
             return
 
         self._json({"error": "not found"}, 404)

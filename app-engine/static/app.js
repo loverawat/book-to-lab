@@ -159,6 +159,26 @@ function renderExercise(blob) {
 
   if (state.status === "passed") $("next-row").classList.remove("hidden");
   $("skip-btn").classList.toggle("hidden", state.status === "passed");
+
+  renderCheckpointNudge(state.status === "passed");
+}
+
+// Optional, non-gating nudge shown alongside "Continue" once this blob is
+// passed: if enough concepts have been passed overall, offer a synthesis
+// challenge combining recent ones right here instead of only via the
+// sidebar button - "between blobs" is where combining what you just
+// learned with what came before is most natural, and skipping it (just
+// clicking Continue) has no cost.
+function renderCheckpointNudge(blobPassed) {
+  const passedCount = orderedBlobs().filter(
+    ({ blob }) => (PROGRESS.blobs[blob.id] || {}).status === "passed"
+  ).length;
+  const eligible = blobPassed && passedCount >= 2;
+  $("checkpoint-nudge").classList.toggle("hidden", !eligible);
+  if (eligible) {
+    $("checkpoint-nudge-text").textContent = "Optional: try a synthesis challenge combining recent concepts";
+    $("checkpoint-nudge-btn").onclick = openSynthesisChallenge;
+  }
 }
 
 let draftSaveTimer = null;
@@ -216,6 +236,11 @@ async function refreshContent() {
     renderReading(blob);
     renderExercise(blob);
   }
+  // Re-check on every refresh, not just page load, so a review that
+  // becomes due mid-session (e.g. right after passing a blob, or after a
+  // failed synthesis challenge pulls one forward) shows up between blobs
+  // instead of only on the next reload.
+  checkReviewDue();
 }
 
 function openReviewModal(reviewBlob) {
@@ -246,6 +271,8 @@ async function checkReviewDue() {
       openReviewModal(data.blob);
       $("review-banner").classList.add("hidden");
     };
+  } else {
+    $("review-banner").classList.add("hidden");
   }
 }
 
@@ -257,8 +284,12 @@ $("run-btn").onclick = async () => {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ blob_id: CURRENT_BLOB_ID, code }),
   });
-  $("run-output").textContent = (result.passed ? "PASSED\n\n" : "FAILED\n\n") + result.output;
+  // refreshContent() re-renders the exercise section (to pick up the new
+  // pass/locked state, unlocked next blob, etc.) and that unconditionally
+  // clears #run-output - so it must run BEFORE we write the result, or
+  // the result flashes for a frame and is immediately wiped.
   await refreshContent();
+  $("run-output").textContent = (result.passed ? "PASSED\n\n" : "FAILED\n\n") + result.output;
 };
 
 $("hint-btn").onclick = async () => {
@@ -371,15 +402,21 @@ $("grade-answer-btn").onclick = async () => {
     $("grade-answer-output").textContent = result.error;
     return;
   }
-  renderGradedResult($("grade-answer-output"), { answer, verdict: result.verdict, feedback: result.feedback });
   if (!result.final) {
+    // not final yet (a "partial" verdict) - no progress was written
+    // server-side, so refreshContent() isn't called here and it's safe to
+    // render straight away.
+    renderGradedResult($("grade-answer-output"), { answer, verdict: result.verdict, feedback: result.feedback });
     PENDING_FOLLOW_UP = { question: result.follow_up_question, originalAnswer: answer };
     $("follow-up-question").textContent = result.follow_up_question;
     renderMath($("follow-up-question"));
     $("follow-up-block").classList.remove("hidden");
   } else {
-    $("follow-up-block").classList.add("hidden");
+    // final - progress was written server-side, so refresh (which
+    // re-renders the exercise section and clears #grade-answer-output)
+    // BEFORE writing the result, same reasoning as run-btn above.
     await refreshContent();
+    renderGradedResult($("grade-answer-output"), { answer, verdict: result.verdict, feedback: result.feedback });
   }
 };
 
@@ -401,10 +438,11 @@ $("submit-follow-up-btn").onclick = async () => {
     $("grade-answer-output").textContent = result.error;
     return;
   }
-  renderGradedResult($("grade-answer-output"), { answer: followUpAnswer, verdict: result.verdict, feedback: result.feedback });
-  $("follow-up-block").classList.add("hidden");
+  // Always final (bounded to one follow-up round) - refresh before
+  // rendering, same reasoning as grade-answer-btn above.
   PENDING_FOLLOW_UP = null;
   await refreshContent();
+  renderGradedResult($("grade-answer-output"), { answer: followUpAnswer, verdict: result.verdict, feedback: result.feedback });
 };
 
 $("next-btn").onclick = () => {
@@ -471,7 +509,7 @@ $("review-submit-btn").onclick = async () => {
   await refreshContent();
 };
 
-$("synthesis-btn").onclick = async () => {
+async function openSynthesisChallenge() {
   const data = await api("/api/synthesis-challenge");
   if (data.error) {
     alert(data.error);
@@ -490,7 +528,9 @@ $("synthesis-btn").onclick = async () => {
   modal.dataset.challengeId = data.challenge_id;
   modal.dataset.isImpl = isImpl ? "1" : "";
   modal.classList.remove("hidden");
-};
+}
+
+$("synthesis-btn").onclick = openSynthesisChallenge;
 
 $("synthesis-close-btn").onclick = () => $("synthesis-modal").classList.add("hidden");
 
@@ -512,6 +552,10 @@ $("synthesis-submit-btn").onclick = async () => {
     return;
   }
   renderGradedResult($("synthesis-output"), { answer, passed: result.passed, output: result.output, feedback: result.feedback });
+  // A failed synthesis pulls its component blobs' next review forward
+  // (see apply_synthesis_result in server.py) - refresh so that shows up
+  // in the review banner right away instead of only after a page reload.
+  await refreshContent();
 };
 
 function renderGraphNode(node, isRoot) {
@@ -540,4 +584,3 @@ enableCodeEditing("review-code-input");
 enableCodeEditing("synthesis-code-input");
 
 refreshContent();
-checkReviewDue();

@@ -84,10 +84,19 @@ symlinked into `~/.claude/skills/book-to-lab` for discovery. Remote:
 
 ## Design decisions and why (so they don't get re-litigated)
 
-- **Implementation exercises by default; `short_answer` only when code
-  would be artificial busywork** (e.g. a pure design tradeoff) — and
-  even then, prefer an applied/scenario question over pure recall. This
-  came directly from the user wanting "learn by doing," not a quiz app.
+- **Implementation exercises by default; `short_answer` when code would
+  be artificial busywork, or when the concept is fundamentally about
+  interpretation rather than computation** (what a result means, why
+  it's true, what it looks like geometrically — not just the formula
+  that produces it) — and even then, prefer an applied/scenario question
+  over pure recall. This came directly from the user wanting "learn by
+  doing," not a quiz app; the interpretation clause was added after a
+  math-heavy book (linear algebra demo) generated as 8/8 implementation,
+  every blob framed as "implement a function" even for concepts whose
+  point was geometric meaning (a zero dot product means orthogonal, a
+  zero determinant means no unique solution) — implementable, but not
+  actually testing whether that meaning was understood. See
+  `SKILL.md`'s "Decide exercise type per blob."
 - **Short-answer grading is claude-graded by default** (`/api/grade-answer`
   → `build_grading_prompt()`), with self-assessment (reveal + "I got it
   right"/"I missed it") kept as a manual fallback in the UI for when the
@@ -121,6 +130,27 @@ symlinked into `~/.claude/skills/book-to-lab` for discovery. Remote:
   claude-grading paths as any other exercise. Requires at least 2 passed
   blobs (returns a 400 explaining why otherwise) - there's nothing to
   synthesize from just one concept.
+- **Both spaced review and synthesis challenges are surfaced inline,
+  between blobs, not just as separate on-demand modes.** The review
+  banner (`checkReviewDue()`) now re-checks on every `refreshContent()`
+  instead of only once at page load, so a review that becomes due mid-
+  session shows up right after the blob that triggered it, not only on
+  the next reload. A synthesis nudge (`renderCheckpointNudge()`) appears
+  next to "Continue" whenever 2+ blobs are passed. Both stay strictly
+  optional/non-gating - skipping either and clicking Continue has no
+  cost - matching invariant 6 (only the primary exercise gates
+  progression).
+- **A failed synthesis challenge pulls its component blobs' next review
+  forward to immediately due, but never moves their Leitner box**
+  (`apply_synthesis_result()`, called from `/api/synthesis-submit`).
+  Deliberately lighter than a direct review miss (which does reset the
+  box via `leitner_advance`): struggling to combine several concepts
+  together is weaker evidence against any one of them than missing a
+  question aimed directly at it, but it shouldn't be a no-op either -
+  before this, passing or failing a synthesis challenge had zero effect
+  on spaced-review scheduling. A pass leaves everything untouched (not
+  strong enough evidence to advance a box that a direct review didn't
+  actually re-confirm).
 - **Spaced review is a simple 5-box Leitner system** (`leitner_advance`,
   day-based intervals in `due_review_blob`), not a full SM-2
   implementation. Deliberately simple; revisit only if it proves too
