@@ -186,8 +186,15 @@ nothing global ever gets touched.
 ## Testing changes
 
 `scripts/test_engine.sh` runs the app engine against a worked example
-and checks gating, grading, hints, the knowledge graph, and static
-serving all still work - run it after any change to `server.py`.
+and checks gating, hints, the knowledge graph, static serving, and the
+grading paths that don't need a live model call (running tests against
+real submitted code, self-assessment) - run it after any change to
+`server.py`. It deliberately does **not** call the claude-dependent
+endpoints (claude-graded short answers, dynamic review variants,
+synthesis challenges, the "ask claude to review" button) - those need
+a real `claude` CLI call, which would make the suite slow and
+non-deterministic. Verify those manually against a real book (or the
+worked example) after touching anything that builds their prompts.
 
 Three self-authored, public-domain demo epubs let you sanity-check the
 epub -> markdown + media conversion pipeline without needing a real
