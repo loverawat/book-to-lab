@@ -348,6 +348,27 @@ class Handler(BaseHTTPRequestHandler):
             self._json({"ok": True})
             return
 
+        if parsed.path == "/api/skip":
+            content = load_content()
+            progress = load_progress()
+            blob_id = body["blob_id"]
+            if not is_unlocked(content, progress, blob_id):
+                self._json({"error": "blob is locked"}, 403)
+                return
+            state = progress["blobs"].setdefault(blob_id, {"status": "available", "box": 1, "last_reviewed": 0})
+            state["status"] = "passed"
+            state["skipped"] = True
+            state["box"] = leitner_advance(state.get("box", 1), True)
+            state["last_reviewed"] = time.time()
+            save_progress(progress)
+            self._json({"ok": True})
+            return
+
+        if parsed.path == "/api/reset":
+            PROGRESS_PATH.unlink(missing_ok=True)
+            self._json({"ok": True})
+            return
+
         if parsed.path == "/api/hint":
             content = load_content()
             blob_id = body["blob_id"]

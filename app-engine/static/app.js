@@ -42,7 +42,8 @@ function renderSidebar() {
       const item = document.createElement("div");
       item.className = "blob-item" + (blob.id === CURRENT_BLOB_ID ? " active" : "");
       const dot = document.createElement("span");
-      dot.className = "status-dot status-" + state.status;
+      const dotStatus = state.status === "passed" && state.skipped ? "skipped" : state.status;
+      dot.className = "status-dot status-" + dotStatus;
       item.appendChild(dot);
       const label = document.createElement("span");
       label.textContent = blob.concept;
@@ -86,6 +87,7 @@ function renderExercise(blob) {
   }
 
   if (state.status === "passed") $("next-row").classList.remove("hidden");
+  $("skip-btn").classList.toggle("hidden", state.status === "passed");
 }
 
 let draftSaveTimer = null;
@@ -230,6 +232,25 @@ $("next-btn").onclick = () => {
   const ids = orderedBlobs().map(({ blob }) => blob.id);
   const idx = ids.indexOf(CURRENT_BLOB_ID);
   if (idx >= 0 && idx + 1 < ids.length) loadBlob(ids[idx + 1]);
+};
+
+$("skip-btn").onclick = async () => {
+  await api("/api/skip", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ blob_id: CURRENT_BLOB_ID }),
+  });
+  await refreshContent();
+};
+
+$("reset-progress-btn").onclick = async () => {
+  const ok = confirm(
+    "Reset all progress for this book? This erases every passed/skipped exercise and cannot be undone."
+  );
+  if (!ok) return;
+  await api("/api/reset", { method: "POST" });
+  CURRENT_BLOB_ID = null;
+  await refreshContent();
 };
 
 $("show-graph-btn").onclick = async () => {

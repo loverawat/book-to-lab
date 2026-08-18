@@ -77,16 +77,35 @@ resp=$(curl -s "$BASE/api/graph?blob_id=ch01-b03&depth=4")
 check "graph includes root" '"id": "ch01-b03"' "$resp"
 check "graph includes prerequisite" '"id": "ch01-b01"' "$resp"
 
-# 7. short-answer self-assessment updates progress
-curl -s -X POST "$BASE/api/submit" -H 'Content-Type: application/json' \
-  -d '{"blob_id":"ch01-b02","code":"def binary_search(items, target):\n    low, high = 0, len(items) - 1\n    while low <= high:\n        mid = (low + high) // 2\n        if items[mid] == target:\n            return mid\n        elif items[mid] < target:\n            low = mid + 1\n        else:\n            high = mid - 1\n    return -1\n"}' > /dev/null
+# 7. skip enforces gating too - locked blob can't be skipped
+code=$(curl -s -o /dev/null -w "%{http_code}" -X POST "$BASE/api/skip" \
+  -H 'Content-Type: application/json' -d '{"blob_id":"ch01-b03"}')
+check "locked blob skip returns 403" "403" "$code"
+
+# skip marks a blob passed without solving it, and unlocks the next one
+resp=$(curl -s -X POST "$BASE/api/skip" -H 'Content-Type: application/json' \
+  -d '{"blob_id":"ch01-b02"}')
+check "skip accepted" '"ok": true' "$resp"
+resp=$(curl -s "$BASE/api/content")
+check "skipped blob marked passed+skipped" '"ch01-b02": {"status": "passed"' "$resp"
+check "skipped flag recorded" '"skipped": true' "$resp"
+check "next blob unlocked after skip" '"ch01-b03": {"status": "available"' "$resp"
+
+# 8. short-answer self-assessment updates progress
 resp=$(curl -s -X POST "$BASE/api/self-assess" -H 'Content-Type: application/json' \
   -d '{"blob_id":"ch01-b03","correct":true}')
 check "self-assess accepted" '"ok": true' "$resp"
 
-# 8. static frontend served
+# 9. static frontend served
 code=$(curl -s -o /dev/null -w "%{http_code}" "$BASE/")
 check "index.html served" "200" "$code"
+
+# 10. reset wipes all progress back to the initial state
+resp=$(curl -s -X POST "$BASE/api/reset")
+check "reset accepted" '"ok": true' "$resp"
+resp=$(curl -s "$BASE/api/content")
+check "reset clears passed status" '"ch01-b01": {"status": "available"' "$resp"
+check "reset relocks later blobs" '"ch01-b03": {"status": "locked"' "$resp"
 
 if [[ "$FAIL" -eq 0 ]]; then
   echo

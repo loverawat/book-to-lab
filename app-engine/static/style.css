@@ -7,6 +7,7 @@
   --accent: #4c5fd5;
   --accent-text: #ffffff;
   --pass: #1f9254;
+  --skipped: #b8860b;
   --fail: #c23b3b;
   --locked: #a8a8b3;
 }
@@ -20,6 +21,7 @@
     --accent: #7c8cf0;
     --accent-text: #14141a;
     --pass: #4cc987;
+    --skipped: #dcb04a;
     --fail: #e5716a;
     --locked: #5a5a63;
   }
@@ -66,6 +68,21 @@ body {
 .status-locked { background: var(--locked); }
 .status-available { background: var(--accent); }
 .status-passed { background: var(--pass); }
+.status-skipped { background: var(--skipped); }
+
+#reset-progress-btn {
+  font: inherit;
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--text-dim);
+  padding: 6px 10px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 12px;
+  margin-top: 16px;
+  width: 100%;
+}
+#reset-progress-btn:hover { color: var(--fail); border-color: var(--fail); }
 
 #content-pane { flex: 1; padding: 32px; max-width: 780px; margin: 0 auto; }
 #review-banner {
@@ -82,7 +99,8 @@ body {
 #reading-text pre { background: var(--bg-alt); padding: 10px; border-radius: 6px; overflow-x: auto; }
 #reading-text img { max-width: 100%; }
 #show-graph-btn, #hint-btn, #reveal-btn, #claude-review-btn, #run-btn,
-#next-btn, #reveal-answer-btn, #got-it-btn, #missed-it-btn, #graph-close-btn, #review-banner-go {
+#next-btn, #reveal-answer-btn, #got-it-btn, #missed-it-btn, #graph-close-btn,
+#review-banner-go, #skip-btn {
   font: inherit;
   border: 1px solid var(--border);
   background: var(--bg-alt);
