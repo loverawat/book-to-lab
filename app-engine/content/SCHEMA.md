@@ -9,6 +9,12 @@ The skill generates this file from the converted markdown; the engine
   "title": "Book Title",
   "language": "python",           // "python" | "javascript" - drives which
                                     // interpreter runs implementation exercises
+  "dependencies": ["numpy"],      // third-party packages (Python: pip names,
+                                    // optionally pinned, e.g. "requests==2.31.0")
+                                    // this book's exercises import beyond the
+                                    // standard library. [] or omitted if none -
+                                    // only used when language is "python"; see
+                                    // "Per-book dependency isolation" below.
   "chapters": [
     {
       "id": "ch01",
@@ -64,3 +70,15 @@ The skill generates this file from the converted markdown; the engine
   deep.
 - Blob order in `chapters[].blobs[]` is the linear gating order: a blob
   only unlocks once the previous one is passed.
+
+## Per-book dependency isolation
+
+If any exercise's `test_code`/`starter_code`/`reference_solution` imports
+a third-party package, list it in the top-level `dependencies` array.
+On first run, `server.py` creates a venv at `<app_dir>/.venv` containing
+exactly those packages and runs all of that book's implementation
+exercises through it - never the system Python, and never shared with
+any other book. Leave `dependencies` empty (or omit it) for books that
+only need the standard library; no venv is created in that case, so
+there's zero setup cost. Keep the list minimal - only what the
+exercises actually import, not everything the book happens to mention.

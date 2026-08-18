@@ -1,6 +1,7 @@
 {
   "title": "Example Book: Tiny Algorithms",
   "language": "python",
+  "dependencies": [],
   "chapters": [
     {
       "id": "ch01",

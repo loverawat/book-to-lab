@@ -125,6 +125,16 @@ the book is clearly JS-focused). You must produce:
 - `reference_solution` - a real, correct solution matching the book's
   approach.
 
+If `test_code`/`starter_code`/`reference_solution` for a Python book
+import anything beyond the standard library (e.g. `numpy`, `requests`),
+add that package name to the top-level `dependencies` array in
+`content.json` (dedupe as you go - most books converge on a small,
+stable set after the first few chapters). Leave it empty for books that
+only need the standard library. This is what lets the engine run that
+book's exercises in their own isolated per-book environment instead of
+your system Python - see "Per-book dependency isolation" in
+`app-engine/content/SCHEMA.md`.
+
 For `short_answer` exercises, write `prompt` and `expected_answer` (the
 reference answer shown when the learner self-assesses - no auto-grading
 needed, see the app's self-assessment flow).
@@ -142,9 +152,9 @@ sequentially.
 ### 5. Append to content.json
 
 Merge this chapter's blobs into the running `content.json`
-(`{title, language, chapters: [{id, title, blobs: [...]}]}`), matching
-the schema documented in `app-engine/content/SCHEMA.md`. Validate it's
-well-formed JSON before moving to the next chapter.
+(`{title, language, dependencies, chapters: [{id, title, blobs: [...]}]}`),
+matching the schema documented in `app-engine/content/SCHEMA.md`.
+Validate it's well-formed JSON before moving to the next chapter.
 
 ## Phase 3 - Run it
 
@@ -156,6 +166,11 @@ Report the local URL (default `http://127.0.0.1:8420`) to the user. The
 "ask claude to review" button in the app shells out to the `claude` CLI
 on the user's PATH (their existing Claude Code login/subscription, not a
 separate API key) - no setup needed beyond having `claude` installed.
+
+If `content.json` has a non-empty `dependencies` list, this first
+startup will pause briefly to create `<output_dir>/app/.venv` and
+install them - mention that to the user so a several-second delay on
+first launch isn't mistaken for a hang.
 
 ## Notes
 

@@ -13,7 +13,11 @@ Generic local server for a generated book-lab. Reads content/content.json
   - optional grounded review via the `claude` CLI
 
 Run with: python3 server.py [port]
-Uses only the Python standard library - no pip install required.
+The engine itself uses only the Python standard library - no pip
+install required. If a book declares third-party dependencies (see
+content.json's "dependencies" field), a venv for just that book is
+created lazily on first run under <app_dir>/.venv, so those packages
+never touch the system/global Python.
 """
 import json
 import os
@@ -30,13 +34,35 @@ ROOT = Path(__file__).parent.resolve()
 STATIC_DIR = ROOT / "static"
 CONTENT_PATH = ROOT / "content" / "content.json"
 PROGRESS_PATH = ROOT / "content" / "progress.json"
-
-RUNNERS = {
-    "python": {"ext": "py", "cmd": lambda path: ["python3", str(path)]},
-    "javascript": {"ext": "js", "cmd": lambda path: ["node", str(path)]},
-}
+VENV_DIR = ROOT / ".venv"
 
 EXEC_TIMEOUT_SECS = 10
+
+
+def venv_python():
+    """Path to this book's isolated interpreter, if one has been set up."""
+    candidate = VENV_DIR / "bin" / "python3"
+    return str(candidate) if candidate.exists() else None
+
+
+def ensure_venv(content):
+    """Lazily create a per-book venv the first time a book declares
+    third-party dependencies. No-op for books that only need the
+    standard library, and no-op on every run after the first."""
+    deps = content.get("dependencies", [])
+    if not deps or VENV_DIR.exists():
+        return
+    print(f"Setting up an isolated environment for this book's dependencies ({', '.join(deps)})...")
+    subprocess.run([sys.executable, "-m", "venv", str(VENV_DIR)], check=True)
+    pip = str(VENV_DIR / "bin" / "pip")
+    subprocess.run([pip, "install", "--quiet", *deps], check=True)
+    print("Done - this only happens once for this book.")
+
+
+RUNNERS = {
+    "python": {"ext": "py", "cmd": lambda path: [venv_python() or "python3", str(path)]},
+    "javascript": {"ext": "js", "cmd": lambda path: ["node", str(path)]},
+}
 
 
 def load_content():
@@ -353,6 +379,7 @@ def main():
     if not CONTENT_PATH.exists():
         print(f"No content found at {CONTENT_PATH}. This app was not generated correctly.", file=sys.stderr)
         sys.exit(1)
+    ensure_venv(load_content())
     port = int(sys.argv[1]) if len(sys.argv) > 1 else 8420
     server = ThreadingHTTPServer(("127.0.0.1", port), Handler)
     print(f"book-to-lab running at http://127.0.0.1:{port}")

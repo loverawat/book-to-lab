@@ -100,6 +100,15 @@ again - just run its app directly:
 cd <output_dir>/app && python3 server.py
 ```
 
+If that book's exercises need third-party packages (say, a book about
+pandas), the very first launch will pause for a few seconds to set up
+an isolated environment just for that book (`<output_dir>/app/.venv`)
+and install exactly what it needs there - not your system Python.
+Every book gets its own, so different books can use different, even
+conflicting, package versions without interfering with each other.
+Deleting a book's output folder removes its dependencies with it -
+nothing global ever gets touched.
+
 ## Adapting it to your own use case
 
 - **Change what counts as "an exercise"** - edit the generation rules in

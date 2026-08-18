@@ -47,10 +47,13 @@ symlinked into `~/.claude/skills/book-to-lab` for discovery. Remote:
    books ship official companion code (e.g. a GitHub repo). This skill
    deliberately never depends on that — it must work identically for any
    epub, including ones with no companion material anywhere.
-4. **Zero required setup beyond `pandoc` and `python3`.** The engine is
-   Python-stdlib-only, no `pip install`. Don't add a dependency to
-   `server.py` without a strong reason — it breaks the "just clone and
-   run" story in the README.
+4. **Zero required setup beyond `pandoc` and `python3`.** The engine
+   itself is Python-stdlib-only — `venv` and `pip` are part of the
+   standard toolchain, so a book declaring `dependencies` still doesn't
+   add an external requirement, it just costs a one-time local install
+   into that book's own `.venv`. Don't add a *required* third-party
+   dependency to `server.py` itself without a strong reason — it breaks
+   the "just clone and run" story in the README.
 5. **Grading that needs a live LLM call goes through the `claude` CLI
    subprocess, never a raw Anthropic API key.** The CLI rides on the
    user's existing Claude Code login/subscription; a raw API key would
@@ -84,6 +87,15 @@ symlinked into `~/.claude/skills/book-to-lab` for discovery. Remote:
   in-browser runtime like Pyodide) — chosen because exercises should be
   able to use real libraries, and this is a personal single-machine tool,
   not something meant to be shared/embedded as a public Artifact.
+- **Per-book dependency isolation via a lazily-created venv**
+  (`ensure_venv()`, `<app_dir>/.venv`), not a shared global install and
+  not Docker. This solves *dependency* isolation (no cross-book version
+  conflicts, no global `pip install` pollution, trivial cleanup — delete
+  the book's folder) — it is explicitly **not** a security sandbox: code
+  still runs as the host user with full filesystem/network access, just
+  through a different interpreter. If real security isolation (untrusted
+  code, not just untrusted package lists) is ever needed, that's a
+  separate, bigger decision (containers/VMs) — don't conflate the two.
 
 ## Dev workflow
 
