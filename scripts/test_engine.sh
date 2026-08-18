@@ -54,6 +54,16 @@ resp=$(curl -s -X POST "$BASE/api/submit" -H 'Content-Type: application/json' \
   -d '{"blob_id":"ch01-b01","code":"def linear_search(items, target):\n    for i, v in enumerate(items):\n        if v == target:\n            return i\n    return -1\n"}')
 check "correct solution passes" '"passed": true' "$resp"
 
+# 4b. submission is persisted as a draft
+resp=$(curl -s "$BASE/api/content")
+check "draft saved after submit" '"draft": "def linear_search' "$resp"
+
+# 4c. explicit draft save (in-progress, not-yet-submitted code) persists
+curl -s -X POST "$BASE/api/save-draft" -H 'Content-Type: application/json' \
+  -d '{"blob_id":"ch01-b02","code":"# work in progress"}' > /dev/null
+resp=$(curl -s "$BASE/api/content")
+check "explicit draft save persists" '"draft": "# work in progress"' "$resp"
+
 resp=$(curl -s "$BASE/api/content")
 check "next blob unlocked after passing" '"ch01-b02": {"status": "available"' "$resp"
 

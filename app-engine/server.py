@@ -286,8 +286,23 @@ class Handler(BaseHTTPRequestHandler):
             state["box"] = leitner_advance(state.get("box", 1), passed)
             state["last_reviewed"] = time.time()
             state["attempts"] = state.get("attempts", 0) + 1
+            state["draft"] = submission
             save_progress(progress)
             self._json({"passed": passed, "output": output})
+            return
+
+        if parsed.path == "/api/save-draft":
+            content = load_content()
+            progress = load_progress()
+            blob_id = body["blob_id"]
+            _, blob = find_blob(content, blob_id)
+            if blob is None:
+                self._json({"error": "unknown blob_id"}, 404)
+                return
+            state = progress["blobs"].setdefault(blob_id, {"status": "locked", "box": 1, "last_reviewed": 0})
+            state["draft"] = body.get("code", "")
+            save_progress(progress)
+            self._json({"ok": True})
             return
 
         if parsed.path == "/api/self-assess":

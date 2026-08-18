@@ -71,6 +71,7 @@ function renderExercise(blob) {
   $("next-row").classList.add("hidden");
 
   const ex = blob.exercise;
+  const state = PROGRESS.blobs[blob.id] || {};
   $("exercise-prompt").textContent = ex.prompt;
 
   const isImpl = ex.type === "implementation";
@@ -78,17 +79,46 @@ function renderExercise(blob) {
   $("short-answer-exercise").classList.toggle("hidden", isImpl);
 
   if (isImpl) {
-    $("code-input").value = ex.starter_code || "";
+    $("code-input").value = state.draft || ex.starter_code || "";
   } else {
     $("answer-reveal").classList.add("hidden");
     $("expected-answer").textContent = ex.expected_answer || "";
   }
 
-  const state = PROGRESS.blobs[blob.id] || {};
   if (state.status === "passed") $("next-row").classList.remove("hidden");
 }
 
+let draftSaveTimer = null;
+
+function saveDraftNow() {
+  if (!CURRENT_BLOB_ID) return;
+  const { blob } = findBlob(CURRENT_BLOB_ID);
+  if (!blob || blob.exercise.type !== "implementation") return;
+  const code = $("code-input").value;
+  navigator.sendBeacon
+    ? navigator.sendBeacon(
+        "/api/save-draft",
+        new Blob([JSON.stringify({ blob_id: CURRENT_BLOB_ID, code })], { type: "application/json" })
+      )
+    : api("/api/save-draft", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ blob_id: CURRENT_BLOB_ID, code }),
+      });
+}
+
+function scheduleDraftSave() {
+  clearTimeout(draftSaveTimer);
+  draftSaveTimer = setTimeout(saveDraftNow, 800);
+}
+
+$("code-input").addEventListener("input", scheduleDraftSave);
+$("code-input").addEventListener("blur", saveDraftNow);
+window.addEventListener("beforeunload", saveDraftNow);
+
 async function loadBlob(blobId) {
+  saveDraftNow();
+  clearTimeout(draftSaveTimer);
   CURRENT_BLOB_ID = blobId;
   const { blob } = findBlob(blobId);
   renderReading(blob);
