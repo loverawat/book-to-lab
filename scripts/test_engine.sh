@@ -58,6 +58,10 @@ check "correct solution passes" '"passed": true' "$resp"
 resp=$(curl -s "$BASE/api/content")
 check "draft saved after submit" '"draft": "def linear_search' "$resp"
 
+# 4c. struggled pass (failed once, then passed) stays at box 1 rather than
+# advancing, so it comes back for review sooner than an easy first-try pass
+check "struggled pass keeps box at 1" '"ch01-b01": {"status": "passed", "box": 1' "$resp"
+
 # 4c. explicit draft save (in-progress, not-yet-submitted code) persists
 curl -s -X POST "$BASE/api/save-draft" -H 'Content-Type: application/json' \
   -d '{"blob_id":"ch01-b02","code":"# work in progress"}' > /dev/null
@@ -90,6 +94,9 @@ resp=$(curl -s "$BASE/api/content")
 check "skipped blob marked passed+skipped" '"ch01-b02": {"status": "passed"' "$resp"
 check "skipped flag recorded" '"skipped": true' "$resp"
 check "next blob unlocked after skip" '"ch01-b03": {"status": "available"' "$resp"
+# an easy (non-struggled) pass advances the box normally, unlike the
+# struggled first-try-failed case above which stayed at 1
+check "unstruggled skip advances box past 1" '"ch01-b02": {"status": "passed", "box": 2' "$resp"
 
 # 8. short-answer self-assessment updates progress
 resp=$(curl -s -X POST "$BASE/api/self-assess" -H 'Content-Type: application/json' \

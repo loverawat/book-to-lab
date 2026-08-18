@@ -63,6 +63,8 @@ function renderReading(blob) {
   $("reading-text").innerHTML = blob.reading_html || `<p>${blob.reading}</p>`;
 }
 
+let PENDING_FOLLOW_UP = null; // { question } while a follow-up round is in progress
+
 function renderExercise(blob) {
   $("run-output").textContent = "";
   $("hint-output").innerHTML = "";
@@ -70,6 +72,11 @@ function renderExercise(blob) {
   $("reveal-output").classList.add("hidden");
   $("reveal-output").textContent = "";
   $("next-row").classList.add("hidden");
+  $("answer-input").value = "";
+  $("grade-answer-output").innerHTML = "";
+  $("follow-up-block").classList.add("hidden");
+  $("follow-up-input").value = "";
+  PENDING_FOLLOW_UP = null;
 
   const ex = blob.exercise;
   const state = PROGRESS.blobs[blob.id] || {};
@@ -147,13 +154,31 @@ async function refreshContent() {
   }
 }
 
+function openReviewModal(reviewBlob) {
+  const ex = reviewBlob.exercise;
+  const isImpl = ex.type === "implementation";
+  $("review-modal-title").textContent = reviewBlob.concept;
+  $("review-modal-badge").textContent = reviewBlob.is_variant
+    ? "Fresh variant - different specifics, same concept"
+    : "Original exercise (claude was unreachable, showing the stored version)";
+  $("review-modal-prompt").textContent = ex.prompt;
+  $("review-code-input").classList.toggle("hidden", !isImpl);
+  $("review-answer-input").classList.toggle("hidden", isImpl);
+  $("review-code-input").value = isImpl ? ex.starter_code || "" : "";
+  $("review-answer-input").value = "";
+  $("review-output").textContent = "";
+  $("review-modal").dataset.blobId = reviewBlob.id;
+  $("review-modal").dataset.isImpl = isImpl ? "1" : "";
+  $("review-modal").classList.remove("hidden");
+}
+
 async function checkReviewDue() {
   const data = await api("/api/review-due");
   if (data.blob) {
     $("review-banner").classList.remove("hidden");
     $("review-banner-text").textContent = `Time to review: ${data.blob.concept}`;
     $("review-banner-go").onclick = () => {
-      loadBlob(data.blob.id);
+      openReviewModal(data.blob);
       $("review-banner").classList.add("hidden");
     };
   }
@@ -228,6 +253,63 @@ $("missed-it-btn").onclick = async () => {
   await refreshContent();
 };
 
+function renderVerdict(container, verdict, feedback) {
+  container.innerHTML = "";
+  const badge = document.createElement("p");
+  badge.textContent = `Verdict: ${verdict}`;
+  container.appendChild(badge);
+  const fb = document.createElement("p");
+  fb.textContent = feedback;
+  container.appendChild(fb);
+}
+
+$("grade-answer-btn").onclick = async () => {
+  const answer = $("answer-input").value;
+  $("grade-answer-output").textContent = "Grading (grounded in this chapter only)...";
+  const result = await api("/api/grade-answer", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ blob_id: CURRENT_BLOB_ID, answer }),
+  });
+  if (result.error) {
+    $("grade-answer-output").textContent = result.error;
+    return;
+  }
+  renderVerdict($("grade-answer-output"), result.verdict, result.feedback);
+  if (!result.final) {
+    PENDING_FOLLOW_UP = { question: result.follow_up_question, originalAnswer: answer };
+    $("follow-up-question").textContent = result.follow_up_question;
+    $("follow-up-block").classList.remove("hidden");
+  } else {
+    $("follow-up-block").classList.add("hidden");
+    await refreshContent();
+  }
+};
+
+$("submit-follow-up-btn").onclick = async () => {
+  if (!PENDING_FOLLOW_UP) return;
+  const followUpAnswer = $("follow-up-input").value;
+  $("grade-answer-output").textContent = "Grading...";
+  const result = await api("/api/grade-answer", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      blob_id: CURRENT_BLOB_ID,
+      answer: PENDING_FOLLOW_UP.originalAnswer,
+      follow_up_question: PENDING_FOLLOW_UP.question,
+      follow_up_answer: followUpAnswer,
+    }),
+  });
+  if (result.error) {
+    $("grade-answer-output").textContent = result.error;
+    return;
+  }
+  renderVerdict($("grade-answer-output"), result.verdict, result.feedback);
+  $("follow-up-block").classList.add("hidden");
+  PENDING_FOLLOW_UP = null;
+  await refreshContent();
+};
+
 $("next-btn").onclick = () => {
   const ids = orderedBlobs().map(({ blob }) => blob.id);
   const idx = ids.indexOf(CURRENT_BLOB_ID);
@@ -269,6 +351,76 @@ $("show-graph-btn").onclick = async () => {
   $("graph-modal").classList.remove("hidden");
 };
 $("graph-close-btn").onclick = () => $("graph-modal").classList.add("hidden");
+
+$("review-close-btn").onclick = () => $("review-modal").classList.add("hidden");
+
+$("review-submit-btn").onclick = async () => {
+  const modal = $("review-modal");
+  const blobId = modal.dataset.blobId;
+  const isImpl = modal.dataset.isImpl === "1";
+  const body = isImpl
+    ? { blob_id: blobId, code: $("review-code-input").value }
+    : { blob_id: blobId, answer: $("review-answer-input").value };
+  $("review-output").textContent = "Grading...";
+  const result = await api("/api/review-submit", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  if (result.error) {
+    $("review-output").textContent = result.error;
+    return;
+  }
+  const lines = [result.passed ? "PASSED" : "NOT QUITE"];
+  if (result.output) lines.push(result.output);
+  if (result.feedback) lines.push(result.feedback);
+  $("review-output").textContent = lines.join("\n\n");
+  await refreshContent();
+};
+
+$("synthesis-btn").onclick = async () => {
+  const data = await api("/api/synthesis-challenge");
+  if (data.error) {
+    alert(data.error);
+    return;
+  }
+  const modal = $("synthesis-modal");
+  const isImpl = data.challenge.type === "implementation";
+  $("synthesis-modal-concepts").textContent = `Combining: ${data.concepts.join(", ")}`;
+  $("synthesis-modal-prompt").textContent = data.challenge.prompt;
+  $("synthesis-code-input").classList.toggle("hidden", !isImpl);
+  $("synthesis-answer-input").classList.toggle("hidden", isImpl);
+  $("synthesis-code-input").value = isImpl ? data.challenge.starter_code || "" : "";
+  $("synthesis-answer-input").value = "";
+  $("synthesis-output").textContent = "";
+  modal.dataset.challengeId = data.challenge_id;
+  modal.dataset.isImpl = isImpl ? "1" : "";
+  modal.classList.remove("hidden");
+};
+
+$("synthesis-close-btn").onclick = () => $("synthesis-modal").classList.add("hidden");
+
+$("synthesis-submit-btn").onclick = async () => {
+  const modal = $("synthesis-modal");
+  const isImpl = modal.dataset.isImpl === "1";
+  const body = isImpl
+    ? { challenge_id: modal.dataset.challengeId, code: $("synthesis-code-input").value }
+    : { challenge_id: modal.dataset.challengeId, answer: $("synthesis-answer-input").value };
+  $("synthesis-output").textContent = "Grading...";
+  const result = await api("/api/synthesis-submit", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  if (result.error) {
+    $("synthesis-output").textContent = result.error;
+    return;
+  }
+  const lines = [result.passed ? "PASSED" : "NOT QUITE"];
+  if (result.output) lines.push(result.output);
+  if (result.feedback) lines.push(result.feedback);
+  $("synthesis-output").textContent = lines.join("\n\n");
+};
 
 function renderGraphNode(node, isRoot) {
   const div = document.createElement("div");

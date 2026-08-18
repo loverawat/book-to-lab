@@ -12,6 +12,7 @@
       <div id="progress-bar"><div id="progress-fill"></div></div>
       <div id="chapter-list"></div>
       <div id="sidebar-footer">
+        <button id="synthesis-btn">Synthesis challenge</button>
         <button id="reset-progress-btn">Reset progress</button>
         <button id="shutdown-btn">Shut down server</button>
       </div>
@@ -48,7 +49,21 @@
         </div>
 
         <div id="short-answer-exercise" class="hidden">
-          <button id="reveal-answer-btn">Reveal answer &amp; self-assess</button>
+          <textarea id="answer-input" spellcheck="false" placeholder="Type your answer..."></textarea>
+          <div class="btn-row">
+            <button id="grade-answer-btn">Grade with claude</button>
+            <button id="reveal-answer-btn">Reveal answer &amp; self-assess instead</button>
+          </div>
+          <div id="grade-answer-output"></div>
+
+          <div id="follow-up-block" class="hidden">
+            <p id="follow-up-question"></p>
+            <textarea id="follow-up-input" spellcheck="false" placeholder="Type your answer..."></textarea>
+            <div class="btn-row">
+              <button id="submit-follow-up-btn">Submit follow-up</button>
+            </div>
+          </div>
+
           <div id="answer-reveal" class="hidden">
             <p id="expected-answer"></p>
             <div class="btn-row">
@@ -65,11 +80,41 @@
     </main>
   </div>
 
-  <div id="graph-modal" class="hidden">
-    <div id="graph-modal-inner">
-      <button id="graph-close-btn">&times;</button>
+  <div id="graph-modal" class="modal hidden">
+    <div class="modal-inner">
+      <button id="graph-close-btn" class="modal-close-btn">&times;</button>
       <h3>Prerequisite knowledge graph</h3>
       <div id="graph-tree"></div>
+    </div>
+  </div>
+
+  <div id="review-modal" class="modal hidden">
+    <div class="modal-inner">
+      <button id="review-close-btn" class="modal-close-btn">&times;</button>
+      <h3 id="review-modal-title">Spaced review</h3>
+      <p id="review-modal-badge" class="modal-badge"></p>
+      <p id="review-modal-prompt"></p>
+      <textarea id="review-code-input" class="hidden" spellcheck="false"></textarea>
+      <textarea id="review-answer-input" class="hidden" spellcheck="false" placeholder="Type your answer..."></textarea>
+      <div class="btn-row">
+        <button id="review-submit-btn">Submit</button>
+      </div>
+      <pre id="review-output"></pre>
+    </div>
+  </div>
+
+  <div id="synthesis-modal" class="modal hidden">
+    <div class="modal-inner">
+      <button id="synthesis-close-btn" class="modal-close-btn">&times;</button>
+      <h3>Synthesis challenge</h3>
+      <p id="synthesis-modal-concepts" class="modal-badge"></p>
+      <p id="synthesis-modal-prompt"></p>
+      <textarea id="synthesis-code-input" class="hidden" spellcheck="false"></textarea>
+      <textarea id="synthesis-answer-input" class="hidden" spellcheck="false" placeholder="Type your answer..."></textarea>
+      <div class="btn-row">
+        <button id="synthesis-submit-btn">Submit</button>
+      </div>
+      <pre id="synthesis-output"></pre>
     </div>
   </div>
 

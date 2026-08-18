@@ -20,11 +20,28 @@ graph for any concept, several levels deep.
    hints, a reference solution, and prerequisite links.
 3. **Runs** a local web app for that specific book: gated progression
    (finish the current exercise to unlock the next), a prerequisite
-   knowledge graph per concept, spaced review of things you've already
-   passed, and an optional "ask claude to review my solution" button.
+   knowledge graph per concept, and:
+   - **Claude-graded short answers** - type an answer, get a real verdict
+     and specific feedback grounded in the book, not just a self-check.
+     A "partially correct" verdict triggers one targeted follow-up
+     question probing exactly the gap, instead of a flat right/wrong.
+   - **Spaced review with fresh variants** - when a passed concept comes
+     back for review, you get a newly generated variant (different
+     inputs/scenario, same concept), not a replay of the exact exercise
+     you already solved - so passing it again means something. A concept
+     you struggled with (more than one attempt) comes back for review
+     sooner than one you got right immediately.
+   - **Synthesis challenges** - on demand, combine your 2-3 most
+     recently passed concepts into one exercise that requires using them
+     together, not just recalling each in isolation.
+   - **Skip, reset, and shut down** from the sidebar - mark a concept
+     known without redoing it (tracked separately from an actual pass),
+     wipe a book's progress to start over, or stop the server, all
+     without leaving the browser.
 
-Everything generated is grounded strictly in that book's own text - no
-outside best practices or other sources get mixed in, by design.
+Everything generated - and every judgment the app makes at runtime -
+is grounded strictly in that book's own text. No outside best practices
+or other sources get mixed in, by design.
 
 ## How it's built
 

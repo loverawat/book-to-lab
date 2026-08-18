@@ -71,7 +71,7 @@ body {
 .status-skipped { background: var(--skipped); }
 
 #sidebar-footer { margin-top: 16px; display: flex; flex-direction: column; gap: 6px; }
-#reset-progress-btn, #shutdown-btn {
+#synthesis-btn, #reset-progress-btn, #shutdown-btn {
   font: inherit;
   border: 1px solid var(--border);
   background: transparent;
@@ -82,6 +82,7 @@ body {
   font-size: 12px;
   width: 100%;
 }
+#synthesis-btn:hover { color: var(--accent); border-color: var(--accent); }
 #reset-progress-btn:hover, #shutdown-btn:hover { color: var(--fail); border-color: var(--fail); }
 
 #shutdown-overlay {
@@ -120,7 +121,8 @@ body {
 #reading-text img { max-width: 100%; }
 #show-graph-btn, #hint-btn, #reveal-btn, #claude-review-btn, #run-btn,
 #next-btn, #reveal-answer-btn, #got-it-btn, #missed-it-btn, #graph-close-btn,
-#review-banner-go, #skip-btn {
+#review-banner-go, #skip-btn, #grade-answer-btn, #submit-follow-up-btn,
+#review-submit-btn, #synthesis-submit-btn, #review-close-btn, #synthesis-close-btn {
   font: inherit;
   border: 1px solid var(--border);
   background: var(--bg-alt);
@@ -129,11 +131,15 @@ body {
   border-radius: 6px;
   cursor: pointer;
 }
-#run-btn, #next-btn, #got-it-btn { background: var(--accent); color: var(--accent-text); border-color: var(--accent); }
+#run-btn, #next-btn, #got-it-btn, #grade-answer-btn, #submit-follow-up-btn,
+#review-submit-btn, #synthesis-submit-btn {
+  background: var(--accent); color: var(--accent-text); border-color: var(--accent);
+}
 .btn-row { display: flex; gap: 8px; flex-wrap: wrap; margin: 10px 0; }
-#code-input {
+#code-input, #answer-input, #follow-up-input, #review-code-input,
+#review-answer-input, #synthesis-code-input, #synthesis-answer-input {
   width: 100%;
-  min-height: 220px;
+  min-height: 140px;
   font-family: ui-monospace, SFMono-Regular, monospace;
   font-size: 13px;
   padding: 10px;
@@ -142,7 +148,8 @@ body {
   background: var(--bg-alt);
   color: var(--text);
 }
-#run-output, #reveal-output {
+#code-input, #review-code-input, #synthesis-code-input { min-height: 220px; }
+#run-output, #reveal-output, #review-output, #synthesis-output {
   white-space: pre-wrap;
   background: var(--bg-alt);
   padding: 10px;
@@ -150,18 +157,21 @@ body {
   font-family: ui-monospace, monospace;
   font-size: 13px;
 }
-#hint-output, #claude-review-output { font-size: 14px; }
+#hint-output, #claude-review-output, #grade-answer-output { font-size: 14px; }
+#follow-up-block { margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--border); }
 .hidden { display: none !important; }
 
-#graph-modal {
+.modal {
   position: fixed; inset: 0; background: rgba(0,0,0,0.5);
   display: flex; align-items: center; justify-content: center;
+  z-index: 10;
 }
-#graph-modal-inner {
+.modal-inner {
   background: var(--bg); border: 1px solid var(--border);
   border-radius: 10px; padding: 24px; max-width: 600px; width: 90%;
   max-height: 80vh; overflow-y: auto; position: relative;
 }
-#graph-close-btn { position: absolute; top: 12px; right: 12px; }
+.modal-close-btn { position: absolute; top: 12px; right: 12px; }
+.modal-badge { color: var(--text-dim); font-size: 13px; }
 .graph-node { margin-left: 18px; border-left: 2px solid var(--border); padding-left: 12px; margin-top: 8px; }
 .graph-node > .concept { font-weight: 500; }

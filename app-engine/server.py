@@ -21,6 +21,7 @@ never touch the system/global Python.
 """
 import json
 import os
+import re
 import subprocess
 import sys
 import tempfile
@@ -120,6 +121,7 @@ def run_code_test(language, submitted_code, test_code):
         test_file = tmp_path / f"test_solution.{ext}"
         solution_file.write_text(submitted_code, encoding="utf-8")
         test_file.write_text(test_code, encoding="utf-8")
+        env = {**os.environ, "BOOK_TO_LAB_SEED": str(time.time_ns())}
         try:
             result = subprocess.run(
                 runner["cmd"](test_file),
@@ -127,6 +129,7 @@ def run_code_test(language, submitted_code, test_code):
                 capture_output=True,
                 text=True,
                 timeout=EXEC_TIMEOUT_SECS,
+                env=env,
             )
             passed = result.returncode == 0
             output = (result.stdout or "") + (result.stderr or "")
@@ -136,10 +139,16 @@ def run_code_test(language, submitted_code, test_code):
     return passed, output.strip()
 
 
-def leitner_advance(box, passed):
-    if passed:
-        return min(box + 1, 5)
-    return 1
+def leitner_advance(box, passed, struggled=False):
+    """struggled = it took more than one attempt to finally pass. A
+    struggled pass still needs a near-term recheck rather than jumping
+    straight into the normal box progression - getting it right on
+    attempt 3 isn't the same evidence of retention as attempt 1."""
+    if not passed:
+        return 1
+    if struggled:
+        return 1
+    return min(box + 1, 5)
 
 
 def due_review_blob(content, progress):
@@ -159,6 +168,16 @@ def due_review_blob(content, progress):
         return None
     candidates.sort()
     return candidates[0][1]
+
+
+def recent_passed_blobs(content, progress, n=3):
+    passed = [
+        (progress["blobs"][bid].get("last_reviewed", 0), bid)
+        for bid in ordered_blob_ids(content)
+        if progress["blobs"].get(bid, {}).get("status") == "passed"
+    ]
+    passed.sort(reverse=True)
+    return [bid for _, bid in passed[:n]]
 
 
 def build_graph(content, blob_id, depth):
@@ -218,6 +237,144 @@ def claude_review(book_title, excerpt, prompt, submission):
         return "claude CLI review timed out."
 
 
+# --- structured (JSON-returning) claude CLI calls, used for grading with a
+# verdict, generating spaced-review variants, and generating synthesis
+# challenges. All grounded strictly in book excerpts, same rule as
+# claude_review() above - see CLAUDE.md's design-decisions note on this.
+
+def _extract_json_object(text):
+    text = text.strip()
+    try:
+        return json.loads(text)
+    except json.JSONDecodeError:
+        pass
+    match = re.search(r"\{.*\}", text, re.DOTALL)
+    if match:
+        try:
+            return json.loads(match.group(0))
+        except json.JSONDecodeError:
+            return None
+    return None
+
+
+def call_claude_json(prompt, timeout=120):
+    """Returns (parsed_dict, None) on success, or (None, error_message)."""
+    try:
+        result = subprocess.run(["claude", "-p", prompt], capture_output=True, text=True, timeout=timeout)
+    except FileNotFoundError:
+        return None, "claude CLI not found on PATH."
+    except subprocess.TimeoutExpired:
+        return None, "claude CLI timed out."
+    if result.returncode != 0:
+        return None, f"claude CLI error: {result.stderr.strip()}"
+    parsed = _extract_json_object(result.stdout)
+    if parsed is None:
+        return None, "Could not parse claude's response as JSON."
+    return parsed, None
+
+
+def build_grading_prompt(book_title, excerpt, exercise_prompt, expected_answer, answer,
+                          follow_up_question=None, follow_up_answer=None):
+    base = textwrap.dedent(f"""
+        You are grading a learner's answer for the book "{book_title}".
+        Judge ONLY against the book excerpt below - no outside knowledge or
+        general best practices beyond what this excerpt says. If the book's
+        view differs from common convention, the book's view is correct here.
+
+        --- BOOK EXCERPT (source of truth) ---
+        {excerpt}
+        --- END EXCERPT ---
+
+        --- QUESTION ---
+        {exercise_prompt}
+        --- END QUESTION ---
+
+        --- REFERENCE ANSWER (for your grounding only; the learner never sees this wording) ---
+        {expected_answer}
+        --- END REFERENCE ANSWER ---
+
+        --- LEARNER'S ANSWER ---
+        {answer}
+        --- END LEARNER'S ANSWER ---
+    """).strip()
+
+    if follow_up_question is not None:
+        base += "\n\n" + textwrap.dedent(f"""
+            --- FOLLOW-UP QUESTION YOU ASKED ---
+            {follow_up_question}
+            --- END FOLLOW-UP QUESTION ---
+
+            --- LEARNER'S FOLLOW-UP ANSWER ---
+            {follow_up_answer}
+            --- END FOLLOW-UP ANSWER ---
+
+            This is the second and final round - do not ask another follow-up.
+            Respond with ONLY a JSON object, no other text, no markdown fences:
+            {{"verdict": "correct" or "incorrect", "feedback": "2-4 sentences of specific feedback"}}
+        """).strip()
+    else:
+        base += "\n\n" + textwrap.dedent("""
+            Respond with ONLY a JSON object, no other text, no markdown fences:
+            {"verdict": "correct" or "partial" or "incorrect",
+             "feedback": "2-4 sentences of specific feedback",
+             "follow_up_question": "a targeted question probing exactly the gap, or null if verdict is correct"}
+        """).strip()
+    return base
+
+
+def build_variant_prompt(book_title, blob, language):
+    exercise = blob["exercise"]
+    shape = (
+        '{"prompt": "...", "starter_code": "...", "test_code": "...", "reference_solution": "..."}'
+        if exercise["type"] == "implementation"
+        else '{"prompt": "...", "expected_answer": "..."}'
+    )
+    return textwrap.dedent(f"""
+        You are writing a FRESH variant of an existing exercise, for spaced
+        review, testing the same concept from the book "{book_title}" but
+        with different specifics (different inputs/scenario) so it can't be
+        passed just from memory of the original. Ground it ONLY in this
+        excerpt - no outside knowledge or conventions beyond what's here.
+
+        --- EXCERPT ---
+        {blob.get("reading", "")}
+        --- END EXCERPT ---
+
+        --- ORIGINAL EXERCISE (format/style reference only - don't reuse its specifics) ---
+        {json.dumps(exercise)}
+        --- END ORIGINAL ---
+
+        Language for any code: {language}.
+        Respond with ONLY a JSON object, no other text, no markdown fences:
+        {shape}
+    """).strip()
+
+
+def build_synthesis_prompt(book_title, blob_excerpts, language):
+    joined = "\n\n".join(f"[{concept}]\n{text}" for concept, text in blob_excerpts)
+    return textwrap.dedent(f"""
+        You are creating a synthesis exercise for the book "{book_title}"
+        that requires combining ALL of the concepts below together in one
+        exercise - not testing them separately. Ground it ONLY in these
+        excerpts - no outside knowledge or conventions beyond what's here.
+
+        {joined}
+
+        Language for any code: {language}.
+        Respond with ONLY a JSON object, no other text, no markdown fences:
+        {{"type": "implementation" or "short_answer",
+          "prompt": "what to build/answer, requiring combining these concepts together",
+          "starter_code": "stub - only if type is implementation",
+          "test_code": "self-contained test importing from solution.<ext> - only if type is implementation",
+          "reference_solution": "only if type is implementation",
+          "expected_answer": "only if type is short_answer"}}
+    """).strip()
+
+
+REVIEW_VARIANTS = {}       # blob_id -> ephemeral variant exercise dict
+SYNTHESIS_CHALLENGES = {}  # challenge_id -> ephemeral challenge dict
+
+
 class Handler(BaseHTTPRequestHandler):
     def log_message(self, fmt, *args):
         pass
@@ -259,7 +416,20 @@ class Handler(BaseHTTPRequestHandler):
                 self._json({"blob": None})
                 return
             _, blob = find_blob(content, blob_id)
-            self._json({"blob": blob})
+
+            variant_prompt = build_variant_prompt(
+                content.get("title", "this book"), blob, content.get("language", "python")
+            )
+            variant, error = call_claude_json(variant_prompt)
+            if variant is not None:
+                variant["type"] = blob["exercise"]["type"]
+                REVIEW_VARIANTS[blob_id] = variant
+                self._json({"blob": {**blob, "exercise": variant, "is_variant": True}})
+            else:
+                # graceful fallback: review the original stored exercise
+                # rather than block review entirely if claude is unreachable
+                REVIEW_VARIANTS.pop(blob_id, None)
+                self._json({"blob": blob, "is_variant": False})
             return
 
         if path == "/api/graph":
@@ -268,6 +438,30 @@ class Handler(BaseHTTPRequestHandler):
             content = load_content()
             graph = build_graph(content, blob_id, depth)
             self._json({"graph": graph})
+            return
+
+        if path == "/api/synthesis-challenge":
+            content = load_content()
+            progress = load_progress()
+            blob_ids = recent_passed_blobs(content, progress, n=3)
+            if len(blob_ids) < 2:
+                self._json({"error": "Pass at least 2 exercises first, then a synthesis challenge can combine them."}, 400)
+                return
+            excerpts = []
+            concepts = []
+            for bid in blob_ids:
+                _, b = find_blob(content, bid)
+                excerpts.append((b["concept"], b.get("reading", "")))
+                concepts.append(b["concept"])
+            prompt = build_synthesis_prompt(content.get("title", "this book"), excerpts, content.get("language", "python"))
+            result, error = call_claude_json(prompt)
+            if result is None:
+                self._json({"error": error or "Could not generate a synthesis challenge."}, 502)
+                return
+            challenge_id = str(time.time_ns())
+            result["_excerpt"] = "\n\n".join(f"[{c}]\n{t}" for c, t in excerpts)
+            SYNTHESIS_CHALLENGES[challenge_id] = result
+            self._json({"challenge_id": challenge_id, "concepts": concepts, "challenge": result})
             return
 
         # static files
@@ -314,10 +508,11 @@ class Handler(BaseHTTPRequestHandler):
                 return
 
             state = progress["blobs"].setdefault(blob_id, {"status": "available", "box": 1, "last_reviewed": 0})
+            attempts_before = state.get("attempts", 0)
             state["status"] = "passed" if passed else "available"
-            state["box"] = leitner_advance(state.get("box", 1), passed)
+            state["box"] = leitner_advance(state.get("box", 1), passed, struggled=passed and attempts_before > 0)
             state["last_reviewed"] = time.time()
-            state["attempts"] = state.get("attempts", 0) + 1
+            state["attempts"] = attempts_before + 1
             state["draft"] = submission
             save_progress(progress)
             self._json({"passed": passed, "output": output})
@@ -346,12 +541,57 @@ class Handler(BaseHTTPRequestHandler):
                 return
             correct = bool(body.get("correct"))
             state = progress["blobs"].setdefault(blob_id, {"status": "available", "box": 1, "last_reviewed": 0})
+            attempts_before = state.get("attempts", 0)
             state["status"] = "passed" if correct else "available"
-            state["box"] = leitner_advance(state.get("box", 1), correct)
+            state["box"] = leitner_advance(state.get("box", 1), correct, struggled=correct and attempts_before > 0)
             state["last_reviewed"] = time.time()
-            state["attempts"] = state.get("attempts", 0) + 1
+            state["attempts"] = attempts_before + 1
             save_progress(progress)
             self._json({"ok": True})
+            return
+
+        if parsed.path == "/api/grade-answer":
+            content = load_content()
+            progress = load_progress()
+            blob_id = body["blob_id"]
+            if not is_unlocked(content, progress, blob_id):
+                self._json({"error": "blob is locked"}, 403)
+                return
+            _, blob = find_blob(content, blob_id)
+            exercise = blob["exercise"]
+            answer = body.get("answer", "")
+            follow_up_question = body.get("follow_up_question")
+            follow_up_answer = body.get("follow_up_answer")
+
+            prompt = build_grading_prompt(
+                content.get("title", "this book"), blob.get("reading", ""),
+                exercise.get("prompt", ""), exercise.get("expected_answer", ""),
+                answer, follow_up_question, follow_up_answer,
+            )
+            result, error = call_claude_json(prompt)
+            if result is None:
+                self._json({"error": error or "grading failed"}, 502)
+                return
+
+            verdict = result.get("verdict")
+            is_final = follow_up_question is not None or verdict != "partial"
+            response = {
+                "verdict": verdict,
+                "feedback": result.get("feedback", ""),
+                "final": is_final,
+            }
+            if is_final:
+                state = progress["blobs"].setdefault(blob_id, {"status": "available", "box": 1, "last_reviewed": 0})
+                attempts_before = state.get("attempts", 0)
+                passed = verdict == "correct"
+                state["status"] = "passed" if passed else "available"
+                state["box"] = leitner_advance(state.get("box", 1), passed, struggled=passed and attempts_before > 0)
+                state["last_reviewed"] = time.time()
+                state["attempts"] = attempts_before + 1
+                save_progress(progress)
+            else:
+                response["follow_up_question"] = result.get("follow_up_question")
+            self._json(response)
             return
 
         if parsed.path == "/api/skip":
@@ -406,6 +646,70 @@ class Handler(BaseHTTPRequestHandler):
                 submission,
             )
             self._json({"feedback": feedback})
+            return
+
+        if parsed.path == "/api/review-submit":
+            content = load_content()
+            progress = load_progress()
+            blob_id = body["blob_id"]
+            _, blob = find_blob(content, blob_id)
+            if blob is None:
+                self._json({"error": "unknown blob_id"}, 404)
+                return
+            exercise = REVIEW_VARIANTS.get(blob_id) or blob["exercise"]
+
+            if exercise["type"] == "implementation":
+                passed, output = run_code_test(
+                    content.get("language", "python"), body.get("code", ""), exercise["test_code"]
+                )
+                feedback = None
+            else:
+                prompt = build_grading_prompt(
+                    content.get("title", "this book"), blob.get("reading", ""),
+                    exercise.get("prompt", ""), exercise.get("expected_answer", ""),
+                    body.get("answer", ""),
+                )
+                result, error = call_claude_json(prompt)
+                if result is None:
+                    self._json({"error": error or "grading failed"}, 502)
+                    return
+                passed = result.get("verdict") == "correct"
+                output = None
+                feedback = result.get("feedback")
+
+            state = progress["blobs"].setdefault(blob_id, {"status": "passed", "box": 1, "last_reviewed": 0})
+            state["box"] = leitner_advance(state.get("box", 1), passed)
+            state["last_reviewed"] = time.time()
+            state["attempts"] = state.get("attempts", 0) + 1
+            save_progress(progress)
+            REVIEW_VARIANTS.pop(blob_id, None)
+            self._json({"passed": passed, "output": output, "feedback": feedback})
+            return
+
+        if parsed.path == "/api/synthesis-submit":
+            challenge_id = body.get("challenge_id")
+            challenge = SYNTHESIS_CHALLENGES.get(challenge_id)
+            if challenge is None:
+                self._json({"error": "unknown or expired challenge_id - request a new synthesis challenge"}, 404)
+                return
+            content = load_content()
+
+            if challenge["type"] == "implementation":
+                passed, output = run_code_test(
+                    content.get("language", "python"), body.get("code", ""), challenge["test_code"]
+                )
+                self._json({"passed": passed, "output": output})
+            else:
+                prompt = build_grading_prompt(
+                    content.get("title", "this book"), challenge.get("_excerpt", ""),
+                    challenge.get("prompt", ""), challenge.get("expected_answer", ""),
+                    body.get("answer", ""),
+                )
+                result, error = call_claude_json(prompt)
+                if result is None:
+                    self._json({"error": error or "grading failed"}, 502)
+                    return
+                self._json({"passed": result.get("verdict") == "correct", "feedback": result.get("feedback", "")})
             return
 
         self._json({"error": "not found"}, 404)

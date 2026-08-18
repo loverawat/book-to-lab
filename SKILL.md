@@ -118,9 +118,14 @@ the book is clearly JS-focused). You must produce:
   solution.
 - `test_code` - a self-contained script that does
   `from solution import <name>` and asserts expected behavior, printing
-  `ok` and exiting 0 on success. No network calls, no unseeded
-  randomness. This is graded by literally running it - it must be
-  correct and deterministic.
+  `ok` and exiting 0 on success. This is graded by literally running it.
+  No network calls. Where it's natural (not every exercise), generate
+  random valid inputs seeded from the `BOOK_TO_LAB_SEED` environment
+  variable and check correctness against a property or a small reference
+  computation rather than one fixed input/output pair - see "test_code"
+  in `app-engine/content/SCHEMA.md` for the full rule and why (it stops
+  a submission passing by matching memorized values instead of actually
+  solving the general problem).
 - `hints` - 2-4 hints, ordered gentle -> specific -> near-solution.
 - `reference_solution` - a real, correct solution matching the book's
   approach.
@@ -136,8 +141,16 @@ your system Python - see "Per-book dependency isolation" in
 `app-engine/content/SCHEMA.md`.
 
 For `short_answer` exercises, write `prompt` and `expected_answer` (the
-reference answer shown when the learner self-assesses - no auto-grading
-needed, see the app's self-assessment flow).
+reference answer used both when the learner self-assesses and when the
+app grades their typed answer with `claude`, grounded in `reading` -
+see `claude_grade`/`build_grading_prompt` in `app-engine/server.py`).
+When the concept is a design rationale, a tradeoff, or a "why" rather
+than a discrete fact, prefer framing the prompt as a teach-back
+question - "explain X in your own words as if teaching someone
+unfamiliar with it" - rather than a narrow recall question. Teach-back
+prompts are graded the same way as any other `short_answer` exercise;
+this is a matter of how you phrase `prompt`, not a different schema
+field.
 
 ### 4. Set prerequisites for the knowledge graph
 

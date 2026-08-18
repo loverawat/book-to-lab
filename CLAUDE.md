@@ -38,11 +38,14 @@ symlinked into `~/.claude/skills/book-to-lab` for discovery. Remote:
    fine) — not hardcode one book's needs (not fine).
 2. **Exercises are grounded strictly in the source book.** No outside
    best practices, no "how I'd normally do this," no filling gaps from
-   general knowledge — not in generated exercises, not in the `claude`
-   CLI review prompt (see `claude_review()` in `server.py`, which
-   explicitly instructs the reviewer to judge only against the passed-in
-   excerpt). This is the whole point of the tool: it teaches *this
-   book's* approach, even where it diverges from convention.
+   general knowledge — not in generated exercises, not in any live
+   `claude` CLI call the engine makes at runtime (`claude_review()`,
+   `build_grading_prompt()`, `build_variant_prompt()`,
+   `build_synthesis_prompt()` — every one of these explicitly instructs
+   the model to judge/generate only from the excerpt(s) passed in, never
+   general knowledge). This is the whole point of the tool: it teaches
+   *this book's* approach, even where it diverges from convention. Any
+   new runtime `claude` call must follow the same pattern.
 3. **No reliance on external references even when they exist.** Some
    books ship official companion code (e.g. a GitHub repo). This skill
    deliberately never depends on that — it must work identically for any
@@ -59,9 +62,25 @@ symlinked into `~/.claude/skills/book-to-lab` for discovery. Remote:
    user's existing Claude Code login/subscription; a raw API key would
    be separate, metered billing. See `claude_review()`.
 6. **Gating is enforced server-side, not just hidden in the UI.**
-   `/api/submit` and `/api/self-assess` both check `is_unlocked()`
-   before grading — this was a gap caught during initial testing, don't
-   reintroduce it.
+   `/api/submit`, `/api/self-assess`, `/api/grade-answer`, and
+   `/api/skip` all check `is_unlocked()` before grading — this was a gap
+   caught during initial testing, don't reintroduce it for new endpoints.
+7. **Runtime-generated content (review variants, synthesis challenges)
+   is ephemeral, never written to `content.json`.** `REVIEW_VARIANTS`
+   and `SYNTHESIS_CHALLENGES` are in-memory dicts, gone on restart -
+   that's deliberate. `content.json` is the one artifact the generation
+   step produces and the one thing worth keeping stable; runtime
+   variants exist purely to test retention with different specifics each
+   time, and a synthesis challenge spans multiple blobs so it has no
+   single blob to attach permanent state to. Don't persist either into
+   the stored content pack.
+8. **Structured `claude` CLI calls (grading/variant/synthesis) always
+   degrade gracefully, never crash the request.** `call_claude_json()`
+   returns `(None, error_message)` on any failure (CLI missing, timeout,
+   unparseable output) instead of raising - callers check for `None` and
+   return a clean error response (or, for `/api/review-due`, fall back
+   to the static stored exercise) rather than letting an LLM hiccup break
+   the endpoint.
 
 ## Design decisions and why (so they don't get re-litigated)
 
@@ -69,9 +88,39 @@ symlinked into `~/.claude/skills/book-to-lab` for discovery. Remote:
   would be artificial busywork** (e.g. a pure design tradeoff) — and
   even then, prefer an applied/scenario question over pure recall. This
   came directly from the user wanting "learn by doing," not a quiz app.
-- **Short-answer grading is self-assessment (reveal + "I got it
-  right"/"I missed it"), not automated NLP grading.** Keeps the engine
-  dependency-free and honest — no fake precision from keyword matching.
+- **Short-answer grading is claude-graded by default** (`/api/grade-answer`
+  → `build_grading_prompt()`), with self-assessment (reveal + "I got it
+  right"/"I missed it") kept as a manual fallback in the UI for when the
+  `claude` CLI isn't available. Claude-grading gives a real verdict +
+  specific feedback instead of asking you to judge your own answer; this
+  only became viable once a live grounded grader was assumed reachable
+  (see the conversation that led here - self-assessment was the
+  original, more conservative default before that assumption held).
+- **A "partial" verdict triggers one adaptive follow-up question**
+  targeting exactly the gap identified, then finalizes on the second
+  round regardless of verdict (`build_grading_prompt`'s
+  `follow_up_question is not None` branch never asks a second follow-up).
+  Bounded to one round deliberately - open-ended Socratic looping would
+  be stronger pedagogically but unbounded cost/latency; one round is the
+  practical middle ground.
+- **Spaced review resurfaces a freshly generated variant of the blob's
+  exercise** (`build_variant_prompt`, cached per-blob in
+  `REVIEW_VARIANTS`), not a replay of the stored exercise - replaying the
+  identical exercise risks testing memory of the specific answer rather
+  than retention of the concept. Falls back to the static stored exercise
+  if variant generation fails (see invariant 8).
+- **Passing after a struggle (more than one attempt) keeps the Leitner
+  box at 1 instead of advancing it** (`leitner_advance(..., struggled=)`,
+  driven by `attempts` already tracked in `progress.json`) - eventually
+  getting it right isn't the same evidence of retention as getting it
+  right immediately, so a struggled concept comes back for review sooner
+  than an easy one, not on the same schedule.
+- **Synthesis challenges combine the 2-3 most recently passed blobs**
+  (`recent_passed_blobs`, `build_synthesis_prompt`), generated on demand
+  via `/api/synthesis-challenge`, graded through the same code-test or
+  claude-grading paths as any other exercise. Requires at least 2 passed
+  blobs (returns a 400 explaining why otherwise) - there's nothing to
+  synthesize from just one concept.
 - **Spaced review is a simple 5-box Leitner system** (`leitner_advance`,
   day-based intervals in `due_review_blob`), not a full SM-2
   implementation. Deliberately simple; revisit only if it proves too

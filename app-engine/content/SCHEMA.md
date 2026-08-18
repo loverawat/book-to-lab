@@ -62,8 +62,17 @@ The skill generates this file from the converted markdown; the engine
   over pure recall.
 - `test_code` must be self-contained: it imports from `solution.<ext>`
   (the file the learner's submission is written to) and exits non-zero on
-  failure. Keep it deterministic - no network calls, no randomness without
-  a fixed seed.
+  failure. No network calls. Prefer hardcoded input/output pairs for
+  simple exercises, but where it's natural, generate random valid inputs
+  seeded from the `BOOK_TO_LAB_SEED` environment variable (a fresh value
+  every run, set by the engine) and check correctness against a property
+  or a small reference implementation embedded in the test itself, rather
+  than one fixed input/output pair - this stops a submission from passing
+  by matching memorized specific values instead of actually solving the
+  general problem. Only do this where a real independent check is
+  possible (a property that must hold, or a reference computation using a
+  different method than the one being tested) - don't fake determinism
+  with a check that's really just re-deriving the same fixed answer.
 - `prerequisites` should point to blob ids introduced earlier in the book
   (usually, but not always, the immediately preceding blob). This is what
   powers the "prerequisites for this concept" graph, traversed 3-4 levels
