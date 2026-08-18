@@ -81,9 +81,18 @@ lives.
 - `python3` (stdlib only, nothing to `pip install`)
 - `node` - only if you convert a JavaScript-focused book (exercises run
   in the book's own primary language; Python is the default)
-- `claude` CLI on your `PATH` and logged in - only needed for the
-  optional "ask claude to review" button; everything else (grading,
-  hints, progress, the knowledge graph) works without it
+- `claude` CLI on your `PATH` and logged in (rides on your existing
+  Claude Code login/subscription, not a separate API key) - needed for
+  most of what makes this "implementation-focused" rather than a plain
+  quiz app: claude-graded short answers (with adaptive follow-up),
+  dynamic spaced-review variants, synthesis challenges, and the
+  optional "ask claude to review" button on code exercises. Without it:
+  implementation exercises still auto-grade via real tests, short
+  answers fall back to manual self-assessment (reveal + self-report),
+  spaced review falls back to replaying the stored exercise instead of
+  a fresh variant, and synthesis challenges return an error since
+  there's no fallback for those (nothing to synthesize without it).
+  Progress, hints, and the knowledge graph never need it either way.
 
 ## Install
 
