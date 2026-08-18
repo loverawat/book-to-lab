@@ -38,6 +38,16 @@ graph for any concept, several levels deep.
      known without redoing it (tracked separately from an actual pass),
      wipe a book's progress to start over, or stop the server, all
      without leaving the browser.
+   - **Math rendering** - real LaTeX (`$...$`/`$$...$$`) in the reading
+     pane, exercise prompts, hints, and feedback all get typeset via a
+     vendored KaTeX (no CDN, works offline). Answers can mix plain
+     English and LaTeX freely - grading reads for meaning either way -
+     and a submitted answer is shown back to you rendered, next to the
+     verdict.
+   - **Tab-aware code editor** - Tab/Shift+Tab indent and outdent,
+     Enter continues the previous line's indentation. Plain
+     `<textarea>`s otherwise treat Tab as browser navigation, which
+     makes writing code in them painful.
 
 Everything generated - and every judgment the app makes at runtime -
 is grounded strictly in that book's own text. No outside best practices
@@ -53,10 +63,12 @@ or other sources get mixed in, by design.
   `pandoc` and the Python standard library.
 - `app-engine/` - the generic, book-agnostic local web app (Python
   stdlib server + plain HTML/CSS/JS frontend, no `pip install`, no
-  build step). The same engine runs every book; only
-  `app-engine/content/content.json` differs per book. Its schema is
-  documented in `app-engine/content/SCHEMA.md`, with a small worked
-  example in `app-engine/content/example_content.json`.
+  build step - the one vendored exception is KaTeX in
+  `app-engine/static/vendor/katex/`, included as files rather than a
+  CDN so the app keeps working fully offline). The same engine runs
+  every book; only `app-engine/content/content.json` differs per book.
+  Its schema is documented in `app-engine/content/SCHEMA.md`, with a
+  small worked example in `app-engine/content/example_content.json`.
 
 Each book's generated output (converted text + its own copy of the app)
 lands in `~/BookLabs/<book-slug>/`, independent of where the source epub
@@ -168,13 +180,14 @@ nothing global ever gets touched.
 and checks gating, grading, hints, the knowledge graph, and static
 serving all still work - run it after any change to `server.py`.
 
-Two self-authored, public-domain demo epubs let you sanity-check the
+Three self-authored, public-domain demo epubs let you sanity-check the
 epub -> markdown + media conversion pipeline without needing a real
 book on hand:
 
 ```bash
 python3 scripts/convert_epub.py demo/tiny-demo-book.epub /tmp/demo-out
 python3 scripts/convert_epub.py demo/number-theory-demo-book.epub /tmp/demo-out-2
+python3 scripts/convert_epub.py demo/linear-algebra-demo-book.epub /tmp/demo-out-3
 ```
 
 - `demo/tiny-demo-book.epub` (~3KB) - 3 short fables, one image. Good
@@ -185,6 +198,11 @@ python3 scripts/convert_epub.py demo/number-theory-demo-book.epub /tmp/demo-out-
   through phase 2 generation and exercise the richer features (the
   prerequisite graph, synthesis challenges across concepts, dynamic
   review variants) rather than just testing the converter.
+- `demo/linear-algebra-demo-book.epub` (~10KB) - 8 sections across 3
+  chapters on vectors, matrices, and determinants, with real embedded
+  MathML (not plain-text dollar signs - the same way a real math
+  textbook's epub represents equations). Use this one to check the
+  math-rendering pipeline specifically.
 
 ## License
 

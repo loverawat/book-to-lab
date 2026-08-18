@@ -1,0 +1,6 @@
+KaTeX 0.18.4 (https://katex.org), MIT licensed - see LICENSE.txt.
+Vendored files only: katex.min.js, katex.min.css, contrib/auto-render.min.js,
+and woff2 fonts (woff/ttf fallbacks dropped - not needed for the modern
+browsers this local app targets, since woff2 is listed first in every
+@font-face rule and browsers never fall through to the other formats
+once a supported one is found).

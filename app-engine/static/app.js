@@ -101,9 +101,28 @@ function renderSidebar() {
   $("progress-fill").style.width = total ? `${(100 * passed) / total}%` : "0%";
 }
 
+// KaTeX auto-render: scans an element's text nodes for these delimiters
+// and replaces them with typeset math in place. throwOnError: false so a
+// malformed/partial LaTeX snippet (in book text or a learner's answer)
+// degrades to visible red error text instead of breaking the page.
+const KATEX_OPTIONS = {
+  delimiters: [
+    { left: "$$", right: "$$", display: true },
+    { left: "$", right: "$", display: false },
+    { left: "\\(", right: "\\)", display: false },
+    { left: "\\[", right: "\\]", display: true },
+  ],
+  throwOnError: false,
+};
+
+function renderMath(el) {
+  if (window.renderMathInElement) window.renderMathInElement(el, KATEX_OPTIONS);
+}
+
 function renderReading(blob) {
   $("concept-title").textContent = blob.concept;
   $("reading-text").innerHTML = blob.reading_html || `<p>${blob.reading}</p>`;
+  renderMath($("reading-text"));
 }
 
 let PENDING_FOLLOW_UP = null; // { question } while a follow-up round is in progress
@@ -124,6 +143,7 @@ function renderExercise(blob) {
   const ex = blob.exercise;
   const state = PROGRESS.blobs[blob.id] || {};
   $("exercise-prompt").textContent = ex.prompt;
+  renderMath($("exercise-prompt"));
 
   const isImpl = ex.type === "implementation";
   $("impl-exercise").classList.toggle("hidden", !isImpl);
@@ -134,6 +154,7 @@ function renderExercise(blob) {
   } else {
     $("answer-reveal").classList.add("hidden");
     $("expected-answer").textContent = ex.expected_answer || "";
+    renderMath($("expected-answer"));
   }
 
   if (state.status === "passed") $("next-row").classList.remove("hidden");
@@ -205,6 +226,7 @@ function openReviewModal(reviewBlob) {
     ? "Fresh variant - different specifics, same concept"
     : "Original exercise (claude was unreachable, showing the stored version)";
   $("review-modal-prompt").textContent = ex.prompt;
+  renderMath($("review-modal-prompt"));
   $("review-code-input").classList.toggle("hidden", !isImpl);
   $("review-answer-input").classList.toggle("hidden", isImpl);
   $("review-code-input").value = isImpl ? ex.starter_code || "" : "";
@@ -251,6 +273,7 @@ $("hint-btn").onclick = async () => {
     const p = document.createElement("p");
     p.textContent = `Hint ${level + 1}: ${result.hint}`;
     el.appendChild(p);
+    renderMath(p);
     el.dataset.level = level + 1;
   }
   if (level + 1 >= result.total_hints) $("hint-btn").disabled = true;
@@ -265,6 +288,7 @@ $("claude-review-btn").onclick = async () => {
     body: JSON.stringify({ blob_id: CURRENT_BLOB_ID, code }),
   });
   $("claude-review-output").textContent = result.feedback;
+  renderMath($("claude-review-output"));
 };
 
 $("reveal-btn").onclick = () => {
@@ -296,14 +320,43 @@ $("missed-it-btn").onclick = async () => {
   await refreshContent();
 };
 
-function renderVerdict(container, verdict, feedback) {
+// Unified renderer for any graded result: shows the learner's own
+// submitted answer read back (rendered, so typed LaTeX shows typeset
+// rather than raw source), then the verdict/pass-fail, any code output,
+// and feedback - used by grade-answer, review-submit, and
+// synthesis-submit so the three surfaces behave consistently.
+function renderGradedResult(container, { answer, verdict, passed, output, feedback }) {
   container.innerHTML = "";
-  const badge = document.createElement("p");
-  badge.textContent = `Verdict: ${verdict}`;
-  container.appendChild(badge);
-  const fb = document.createElement("p");
-  fb.textContent = feedback;
-  container.appendChild(fb);
+  if (answer) {
+    const label = document.createElement("p");
+    label.className = "answer-readback-label";
+    label.textContent = "Your answer:";
+    container.appendChild(label);
+    const body = document.createElement("p");
+    body.className = "answer-readback";
+    body.textContent = answer;
+    container.appendChild(body);
+  }
+  if (verdict) {
+    const v = document.createElement("p");
+    v.textContent = `Verdict: ${verdict}`;
+    container.appendChild(v);
+  } else if (typeof passed === "boolean") {
+    const v = document.createElement("p");
+    v.textContent = passed ? "PASSED" : "NOT QUITE";
+    container.appendChild(v);
+  }
+  if (output) {
+    const o = document.createElement("pre");
+    o.textContent = output;
+    container.appendChild(o);
+  }
+  if (feedback) {
+    const f = document.createElement("p");
+    f.textContent = feedback;
+    container.appendChild(f);
+  }
+  renderMath(container);
 }
 
 $("grade-answer-btn").onclick = async () => {
@@ -318,10 +371,11 @@ $("grade-answer-btn").onclick = async () => {
     $("grade-answer-output").textContent = result.error;
     return;
   }
-  renderVerdict($("grade-answer-output"), result.verdict, result.feedback);
+  renderGradedResult($("grade-answer-output"), { answer, verdict: result.verdict, feedback: result.feedback });
   if (!result.final) {
     PENDING_FOLLOW_UP = { question: result.follow_up_question, originalAnswer: answer };
     $("follow-up-question").textContent = result.follow_up_question;
+    renderMath($("follow-up-question"));
     $("follow-up-block").classList.remove("hidden");
   } else {
     $("follow-up-block").classList.add("hidden");
@@ -347,7 +401,7 @@ $("submit-follow-up-btn").onclick = async () => {
     $("grade-answer-output").textContent = result.error;
     return;
   }
-  renderVerdict($("grade-answer-output"), result.verdict, result.feedback);
+  renderGradedResult($("grade-answer-output"), { answer: followUpAnswer, verdict: result.verdict, feedback: result.feedback });
   $("follow-up-block").classList.add("hidden");
   PENDING_FOLLOW_UP = null;
   await refreshContent();
@@ -401,9 +455,8 @@ $("review-submit-btn").onclick = async () => {
   const modal = $("review-modal");
   const blobId = modal.dataset.blobId;
   const isImpl = modal.dataset.isImpl === "1";
-  const body = isImpl
-    ? { blob_id: blobId, code: $("review-code-input").value }
-    : { blob_id: blobId, answer: $("review-answer-input").value };
+  const answer = isImpl ? null : $("review-answer-input").value;
+  const body = isImpl ? { blob_id: blobId, code: $("review-code-input").value } : { blob_id: blobId, answer };
   $("review-output").textContent = "Grading...";
   const result = await api("/api/review-submit", {
     method: "POST",
@@ -414,10 +467,7 @@ $("review-submit-btn").onclick = async () => {
     $("review-output").textContent = result.error;
     return;
   }
-  const lines = [result.passed ? "PASSED" : "NOT QUITE"];
-  if (result.output) lines.push(result.output);
-  if (result.feedback) lines.push(result.feedback);
-  $("review-output").textContent = lines.join("\n\n");
+  renderGradedResult($("review-output"), { answer, passed: result.passed, output: result.output, feedback: result.feedback });
   await refreshContent();
 };
 
@@ -431,6 +481,7 @@ $("synthesis-btn").onclick = async () => {
   const isImpl = data.challenge.type === "implementation";
   $("synthesis-modal-concepts").textContent = `Combining: ${data.concepts.join(", ")}`;
   $("synthesis-modal-prompt").textContent = data.challenge.prompt;
+  renderMath($("synthesis-modal-prompt"));
   $("synthesis-code-input").classList.toggle("hidden", !isImpl);
   $("synthesis-answer-input").classList.toggle("hidden", isImpl);
   $("synthesis-code-input").value = isImpl ? data.challenge.starter_code || "" : "";
@@ -446,9 +497,10 @@ $("synthesis-close-btn").onclick = () => $("synthesis-modal").classList.add("hid
 $("synthesis-submit-btn").onclick = async () => {
   const modal = $("synthesis-modal");
   const isImpl = modal.dataset.isImpl === "1";
+  const answer = isImpl ? null : $("synthesis-answer-input").value;
   const body = isImpl
     ? { challenge_id: modal.dataset.challengeId, code: $("synthesis-code-input").value }
-    : { challenge_id: modal.dataset.challengeId, answer: $("synthesis-answer-input").value };
+    : { challenge_id: modal.dataset.challengeId, answer };
   $("synthesis-output").textContent = "Grading...";
   const result = await api("/api/synthesis-submit", {
     method: "POST",
@@ -459,10 +511,7 @@ $("synthesis-submit-btn").onclick = async () => {
     $("synthesis-output").textContent = result.error;
     return;
   }
-  const lines = [result.passed ? "PASSED" : "NOT QUITE"];
-  if (result.output) lines.push(result.output);
-  if (result.feedback) lines.push(result.feedback);
-  $("synthesis-output").textContent = lines.join("\n\n");
+  renderGradedResult($("synthesis-output"), { answer, passed: result.passed, output: result.output, feedback: result.feedback });
 };
 
 function renderGraphNode(node, isRoot) {

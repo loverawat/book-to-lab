@@ -222,6 +222,9 @@ def claude_review(book_title, excerpt, prompt, submission):
 
         Give a short verdict (correct / partially correct / incorrect) relative
         to the excerpt, then 2-4 sentences of specific feedback. Be concise.
+        If you use any math notation, write it as LaTeX with $...$ for inline
+        or $$...$$ for display equations - it will be rendered, not other
+        notation.
     """).strip()
     try:
         result = subprocess.run(
@@ -309,11 +312,17 @@ def build_grading_prompt(book_title, excerpt, exercise_prompt, expected_answer, 
             --- END FOLLOW-UP ANSWER ---
 
             This is the second and final round - do not ask another follow-up.
+            If you use math notation anywhere below, write it as LaTeX with
+            $...$ inline or $$...$$ for display equations - it will be
+            rendered, not other notation.
             Respond with ONLY a JSON object, no other text, no markdown fences:
             {{"verdict": "correct" or "incorrect", "feedback": "2-4 sentences of specific feedback"}}
         """).strip()
     else:
         base += "\n\n" + textwrap.dedent("""
+            If you use math notation anywhere below, write it as LaTeX with
+            $...$ inline or $$...$$ for display equations - it will be
+            rendered, not other notation.
             Respond with ONLY a JSON object, no other text, no markdown fences:
             {"verdict": "correct" or "partial" or "incorrect",
              "feedback": "2-4 sentences of specific feedback",
@@ -345,6 +354,9 @@ def build_variant_prompt(book_title, blob, language):
         --- END ORIGINAL ---
 
         Language for any code: {language}.
+        If you use math notation in the prompt or answer, write it as LaTeX
+        with $...$ inline or $$...$$ for display equations - it will be
+        rendered, not other notation.
         Respond with ONLY a JSON object, no other text, no markdown fences:
         {shape}
     """).strip()
@@ -361,6 +373,9 @@ def build_synthesis_prompt(book_title, blob_excerpts, language):
         {joined}
 
         Language for any code: {language}.
+        If you use math notation in the prompt or answer, write it as LaTeX
+        with $...$ inline or $$...$$ for display equations - it will be
+        rendered, not other notation.
         Respond with ONLY a JSON object, no other text, no markdown fences:
         {{"type": "implementation" or "short_answer",
           "prompt": "what to build/answer, requiring combining these concepts together",

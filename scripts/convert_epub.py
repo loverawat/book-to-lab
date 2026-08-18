@@ -114,8 +114,14 @@ def rewrite_image_links(markdown_text, chapter_file, media_map):
 
 
 def convert_chapter(chapter_file, index, media_map, markdown_dir):
+    # Plain "markdown" (not "gfm"): real math textbooks embed equations as
+    # MathML in the epub, and pandoc round-trips that through plain markdown
+    # as clean $...$/$$...$$ (the standard convention, and what the app's
+    # KaTeX renderer expects). GFM instead uses GitHub's own math dialect
+    # ($`...`$ and fenced ```math blocks) - wrong target for this. Verified
+    # image/heading/prose syntax is otherwise identical between the two.
     result = subprocess.run(
-        ["pandoc", "-f", "html", "-t", "gfm", str(chapter_file)],
+        ["pandoc", "-f", "html", "-t", "markdown", str(chapter_file)],
         capture_output=True, text=True, check=True,
     )
     md = rewrite_image_links(result.stdout, chapter_file, media_map)

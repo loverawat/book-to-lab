@@ -109,6 +109,16 @@ differs from common convention, the book's technique is what the
 exercise tests. Keep the `reading` field close to the book's own
 wording/explanation rather than substituting your own generic summary.
 
+If the chapter contains real mathematical notation, write it as LaTeX
+using `$...$` for inline math and `$$...$$` for display equations in
+`reading`, `prompt`, `hints`, and `expected_answer` - the app renders
+this (KaTeX) in every place these fields are shown. If the source epub
+represents an equation as an image rather than as text/MathML, note in
+`reading` what the equation shows in words rather than skipping it
+silently - you can't see the image directly from the converted markdown,
+but the surrounding prose usually describes what it establishes well
+enough to explain in words.
+
 For `implementation` exercises, write in the book's detected primary
 language (check `content.json`'s top-level `"language"` field - default
 to `"python"` if the book isn't language-specific; use `"javascript"` if

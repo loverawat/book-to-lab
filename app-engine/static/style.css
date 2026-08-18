@@ -158,6 +158,14 @@ body {
   font-size: 13px;
 }
 #hint-output, #claude-review-output, #grade-answer-output { font-size: 14px; }
+.answer-readback-label { font-size: 12px; color: var(--text-dim); margin-bottom: 2px; }
+.answer-readback {
+  background: var(--bg-alt);
+  border-left: 3px solid var(--border);
+  padding: 6px 10px;
+  margin: 0 0 10px;
+  font-size: 14px;
+}
 #follow-up-block { margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--border); }
 .hidden { display: none !important; }
 
