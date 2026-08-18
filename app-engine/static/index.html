@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>book-to-lab</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div id="app">
+    <aside id="sidebar">
+      <div id="book-title"></div>
+      <div id="progress-bar"><div id="progress-fill"></div></div>
+      <div id="chapter-list"></div>
+    </aside>
+    <main id="content-pane">
+      <div id="review-banner" class="hidden">
+        <span id="review-banner-text"></span>
+        <button id="review-banner-go">Review it</button>
+      </div>
+
+      <section id="reading-section">
+        <h2 id="concept-title"></h2>
+        <div id="reading-text"></div>
+        <button id="show-graph-btn">Prerequisites for this concept</button>
+      </section>
+
+      <section id="exercise-section">
+        <h3>Exercise</h3>
+        <p id="exercise-prompt"></p>
+
+        <div id="impl-exercise" class="hidden">
+          <textarea id="code-input" spellcheck="false"></textarea>
+          <div class="btn-row">
+            <button id="run-btn">Run tests</button>
+            <button id="hint-btn">Show hint</button>
+            <button id="claude-review-btn">Ask claude to review</button>
+            <button id="reveal-btn">Reveal reference solution</button>
+          </div>
+          <pre id="run-output"></pre>
+          <div id="hint-output"></div>
+          <div id="claude-review-output"></div>
+          <pre id="reveal-output" class="hidden"></pre>
+        </div>
+
+        <div id="short-answer-exercise" class="hidden">
+          <button id="reveal-answer-btn">Reveal answer &amp; self-assess</button>
+          <div id="answer-reveal" class="hidden">
+            <p id="expected-answer"></p>
+            <div class="btn-row">
+              <button id="got-it-btn">I got it right</button>
+              <button id="missed-it-btn">I missed it</button>
+            </div>
+          </div>
+        </div>
+
+        <div id="next-row" class="hidden">
+          <button id="next-btn">Continue &rarr;</button>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <div id="graph-modal" class="hidden">
+    <div id="graph-modal-inner">
+      <button id="graph-close-btn">&times;</button>
+      <h3>Prerequisite knowledge graph</h3>
+      <div id="graph-tree"></div>
+    </div>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>

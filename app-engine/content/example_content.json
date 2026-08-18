@@ -1,0 +1,59 @@
+{
+  "title": "Example Book: Tiny Algorithms",
+  "language": "python",
+  "chapters": [
+    {
+      "id": "ch01",
+      "title": "Chapter 1: Searching",
+      "blobs": [
+        {
+          "id": "ch01-b01",
+          "concept": "Linear search",
+          "reading": "Linear search checks each element in a list, one at a time, until it finds the target or reaches the end. It always works, regardless of whether the list is sorted, but in the worst case it looks at every element.",
+          "prerequisites": [],
+          "exercise": {
+            "type": "implementation",
+            "prompt": "Implement linear_search(items, target) returning the index of target in items, or -1 if not found.",
+            "starter_code": "def linear_search(items, target):\n    # your implementation here\n    pass\n",
+            "test_code": "from solution import linear_search\nassert linear_search([5, 3, 8, 1], 8) == 2\nassert linear_search([5, 3, 8, 1], 9) == -1\nassert linear_search([], 1) == -1\nprint('ok')",
+            "hints": [
+              "You need to look at each element in order, comparing it to target.",
+              "Use enumerate(items) to get both the index and value as you loop.",
+              "Return i as soon as items[i] == target; if the loop finishes, return -1."
+            ],
+            "reference_solution": "def linear_search(items, target):\n    for i, value in enumerate(items):\n        if value == target:\n            return i\n    return -1\n"
+          }
+        },
+        {
+          "id": "ch01-b02",
+          "concept": "Binary search",
+          "reading": "Binary search only works on a sorted list. It repeatedly halves the search range: compare the target to the middle element, and discard the half that cannot contain it. This is why it beats linear search on large sorted lists - each step eliminates half the remaining candidates.",
+          "prerequisites": ["ch01-b01"],
+          "exercise": {
+            "type": "implementation",
+            "prompt": "Implement binary_search(items, target) for a sorted list, returning the index of target or -1 if not found.",
+            "starter_code": "def binary_search(items, target):\n    # your implementation here\n    pass\n",
+            "test_code": "from solution import binary_search\nassert binary_search([1, 3, 5, 8, 9], 8) == 3\nassert binary_search([1, 3, 5, 8, 9], 2) == -1\nassert binary_search([], 1) == -1\nprint('ok')",
+            "hints": [
+              "Track a low and high boundary and look at the midpoint between them.",
+              "If items[mid] == target you're done; otherwise narrow low or high based on the comparison.",
+              "low = 0, high = len(items) - 1; while low <= high: mid = (low + high) // 2 ..."
+            ],
+            "reference_solution": "def binary_search(items, target):\n    low, high = 0, len(items) - 1\n    while low <= high:\n        mid = (low + high) // 2\n        if items[mid] == target:\n            return mid\n        elif items[mid] < target:\n            low = mid + 1\n        else:\n            high = mid - 1\n    return -1\n"
+          }
+        },
+        {
+          "id": "ch01-b03",
+          "concept": "Why binary search needs sorted input",
+          "reading": "Binary search's correctness depends entirely on the list being sorted: discarding half the range is only valid because a sorted order guarantees the target can't be in the discarded half. On unsorted data the algorithm can silently return the wrong answer instead of failing loudly.",
+          "prerequisites": ["ch01-b02", "ch01-b01"],
+          "exercise": {
+            "type": "short_answer",
+            "prompt": "Given an unsorted list, why might binary_search return -1 or a wrong index even when the target is present? Answer in your own words before revealing.",
+            "expected_answer": "Because binary search's halving step assumes elements to one side of the midpoint are all smaller (or larger); on unsorted data that assumption doesn't hold, so it can discard the half that actually contains the target, causing it to miss a present value or return an incorrect index."
+          }
+        }
+      ]
+    }
+  ]
+}

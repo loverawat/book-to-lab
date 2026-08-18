@@ -1,0 +1,5 @@
+__pycache__/
+*.pyc
+.DS_Store
+app-engine/content/content.json
+app-engine/content/progress.json
