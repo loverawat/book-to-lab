@@ -24,7 +24,7 @@ The skill generates this file from the converted markdown; the engine
           "id": "ch01-b01",        // must be globally unique, stable, referenced by prerequisites
           "concept": "Short concept name (shown in sidebar)",
           "reading": "Markdown/plain text excerpt explaining the concept, grounded in the book's own words.",
-          "reading_html": "Optional pre-rendered HTML version of `reading`. If absent, the frontend wraps `reading` in a <p>.",
+          "reading_html": "Optional pre-rendered HTML version of `reading`. If absent, the frontend wraps `reading` in a <p>. Can include <img src=\"media/<file>\"> for a book image relevant to this concept - see \"Referencing book images\" below.",
           "prerequisites": ["ch00-b03"],  // ids of blobs you should understand first (drives the knowledge graph)
 
           "exercise": {
@@ -79,6 +79,20 @@ The skill generates this file from the converted markdown; the engine
   deep.
 - Blob order in `chapters[].blobs[]` is the linear gating order: a blob
   only unlocks once the previous one is passed.
+
+## Referencing book images
+
+`convert_epub.py`/`convert_pdf.py` extract every book image into
+`<output_dir>/media/`, outside `app/` - the engine never serves that
+directory directly. To actually show one of these images in the app,
+the generation step must copy the specific file into
+`<output_dir>/app/static/media/` (created the first time it's needed)
+and reference it from `reading_html` as `<img src="media/<file>"
+alt="...">`. `server.py`'s static handler already serves anything under
+`app/static/`, so this needs no engine change - just the file being
+where it's reachable. Only copy images actually relevant to that blob's
+concept, not every image that happened to be nearby in the source; see
+`SKILL.md`'s Phase 2 for the full guidance.
 
 ## Per-book dependency isolation
 

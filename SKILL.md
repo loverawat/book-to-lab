@@ -46,7 +46,9 @@ Everything for this book goes in `<output_dir>`:
 ├── manifest.json         # title, author, ordered chapter list, chapter_confidence (PDF only)
 └── app/                  # the runnable web app for this book
     ├── server.py          # copied from app-engine/, unmodified
-    ├── static/             # copied from app-engine/static/, unmodified
+    ├── static/             # copied from app-engine/static/, unmodified files
+    │   └── media/           # book images YOU copy here during Phase 2, only
+    │                        # the ones actually referenced from content.json
     └── content/
         └── content.json    # THIS is what you generate - see below
 ```
@@ -216,6 +218,21 @@ into LaTeX the same way described for PDF math placeholders in Phase 1 -
 don't skip it silently. If it's illegible even as an image, fall back to
 describing in `reading` what the equation establishes in words; the
 surrounding prose usually makes that possible.
+
+If the chapter's markdown references a real (non-math) image
+(`![...](media/<file>)`) near this blob's source content, and it
+actually illustrates the concept - not decorative, not unrelated, not
+already redundant with the prose - copy that file from `<output_dir>/media/`
+into `<output_dir>/app/static/media/` (create the directory the first
+time you need it) and add `<img src="media/<file>" alt="...">` to
+`reading_html`. The engine already serves anything under `app/static/`,
+so this needs no code change, just the file being copied to where it's
+reachable - see "Referencing book images" in
+`app-engine/content/SCHEMA.md`. Don't copy every image that happens to
+be nearby in the source; most images near a paragraph aren't the point
+of that paragraph. Images already consumed as `[MATH: ...]` placeholders
+are different - those get transcribed into LaTeX text per the paragraph
+above, never also embedded as images here.
 
 For `implementation` exercises, write in the book's detected primary
 language (check `content.json`'s top-level `"language"` field - default

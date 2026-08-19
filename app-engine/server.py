@@ -537,6 +537,8 @@ class Handler(BaseHTTPRequestHandler):
         content_type = {
             ".html": "text/html", ".js": "application/javascript",
             ".css": "text/css", ".json": "application/json",
+            ".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg",
+            ".gif": "image/gif", ".svg": "image/svg+xml", ".webp": "image/webp",
         }.get(file_path.suffix, "application/octet-stream")
         data = file_path.read_bytes()
         self.send_response(200)

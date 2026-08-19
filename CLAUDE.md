@@ -369,6 +369,25 @@ symlinked into `~/.claude/skills/book-to-lab` for discovery. Remote:
   small) - this validates the font-name-detection code path faithfully
   but is not the same as validating against a document real LaTeX
   actually produced.
+- **Book images are copied into `app/static/media/` during Phase 2,
+  not served from the sibling `<output_dir>/media/` directly.** Both
+  `convert_epub.py` and `convert_pdf.py` extract every image into
+  `<output_dir>/media/`, but that trail used to end there - `SKILL.md`
+  never instructed referencing them, and `server.py`'s static handler
+  only serves `app/static/`, so every extracted image sat unused. Fixed
+  by having Phase 2 copy the *specific* images it actually decides to
+  use into `app/static/media/` and reference them from `reading_html`
+  as a normal `<img src="media/<file>">` — zero engine changes, since
+  the existing static handler already serves anything under
+  `app/static/`. Deliberately not the alternative (extending
+  `server.py` to also serve the sibling `media/` directory): that would
+  make the engine depend on output-layout knowledge it doesn't
+  currently have, against invariant 1, for a problem generation-time
+  copying already solves without touching the engine at all. Also means
+  curation is free: only images Phase 2 judges actually relevant to a
+  blob get copied, not every image that happened to be nearby in the
+  source markdown - see `SKILL.md`'s Phase 2 and "Referencing book
+  images" in `app-engine/content/SCHEMA.md`.
 
 ## Dev workflow
 

@@ -15,6 +15,7 @@ rm -f content/progress.json
 cleanup() {
   kill "$SERVER_PID" >/dev/null 2>&1 || true
   rm -f content/content.json content/progress.json
+  rm -rf static/media
 }
 trap cleanup EXIT
 
@@ -106,6 +107,15 @@ check "self-assess accepted" '"ok": true' "$resp"
 # 9. static frontend served
 code=$(curl -s -o /dev/null -w "%{http_code}" "$BASE/")
 check "index.html served" "200" "$code"
+
+# 9b. a book image copied into app/static/media/ during Phase 2 (see
+# CLAUDE.md's "Book images are copied into app/static/media/" note) is
+# served with the correct content type, not the octet-stream fallback
+mkdir -p static/media
+echo "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=" \
+  | base64 -d > static/media/test.png
+content_type=$(curl -s -o /dev/null -w "%{content_type}" "$BASE/media/test.png")
+check "book image served with correct content-type" "image/png" "$content_type"
 
 # 10. reset wipes all progress back to the initial state
 resp=$(curl -s -X POST "$BASE/api/reset")

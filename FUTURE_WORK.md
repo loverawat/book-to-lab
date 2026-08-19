@@ -182,39 +182,24 @@ confirmed against a concept several chapters into a book. `build_graph`
 deep. Re-check on a later concept before treating this as a real gap;
 don't touch the graph code on the strength of the depth-1 case alone.
 
-## Extracted book images are never actually shown (dead `media/`)
+## Extracted book images are never actually shown (dead `media/`) — done
 
-`convert_epub.py` already extracts every epub image into `<output_dir>/media/`
-with links rewritten in the converted markdown - but the trail ends
-there. `SKILL.md` never instructs referencing them from `reading_html`,
-and `server.py`'s static handler only serves files under `app/static/`
-(`STATIC_DIR not in file_path.parents` rejects anything else) - `media/`
-sits next to `app/`, not inside it, so it isn't reachable by the running
-app at all. Net effect: every image the source book actually shipped is
-extracted and then silently unused. `convert_pdf.py` now does the exact
-same thing for PDF-sourced images (its own images extract into `media/`
-the same way, same dead end) - this gap wasn't PDF-specific to begin
-with, but PDF support landing means it now definitely applies to both
-input formats, not just epub. (PDF's *rasterized math* images are a
-different story - those are consumed transiently by the Phase 2
-generation session, which reads and transcribes them into LaTeX text,
-not meant to be displayed as images at all - this item is only about
-regular content images.) This is a small, concrete fix (unlike the
-diagram-generation idea below) and arguably worth doing before that
-idea, since a generated diagram should be a fallback for when the book
-has no useful image of its own, not the only path:
-
-- Decide how `media/` gets served - either copy referenced images into
-  `app/static/media/` during Phase 2 (keeps the "static dir is the only
-  thing the server touches" boundary clean), or extend `server.py`'s
-  static handler to also serve the sibling `media/` directory (simpler,
-  but the engine now depends on output-layout knowledge it doesn't
-  currently have - weigh against invariant 1).
-- Add `SKILL.md` guidance for *when* to reference an existing image in
-  `reading_html` (the book placed it near this concept's text) versus
-  leaving it out (decorative, unrelated, or already redundant with the
-  prose) - not every extracted image belongs on every blob it happened
-  to be near in the source.
+`SKILL.md`'s Phase 2 now copies specific, relevant images from
+`<output_dir>/media/` into `<output_dir>/app/static/media/` and
+references them from `reading_html` as `<img src="media/<file>">` - see
+`CLAUDE.md`'s "Book images are copied into `app/static/media/`" note
+and "Referencing book images" in `app-engine/content/SCHEMA.md`. No
+engine change was needed beyond fixing `server.py`'s static handler to
+send the correct `Content-Type` for image extensions (it previously
+fell back to `application/octet-stream` for everything but
+html/js/css/json - browsers render `<img>` fine regardless via
+content-sniffing, but this was worth fixing properly once image serving
+became a real, deliberate capability rather than an incidental one).
+Verified end-to-end against a real extracted image (from
+`demo/tiny-demo-book.epub`): copied into a scratch app's
+`static/media/`, served via HTTP with the right content-type, bytes
+confirmed identical to the source file. `test_engine.sh` has a
+regression check for this now too.
 
 ## Generated diagrams/animations per blob
 
@@ -224,10 +209,11 @@ steps), could generation produce a simple explanatory diagram or
 animation, grounded in the book's own explanation, the same way it
 already produces grounded exercises? Conclusion from that discussion:
 
-- **Fix the `media/` wiring above first.** "Use the book's own image if
-  it has one" needs that path to exist before "generate one" is worth
-  building - a generated diagram should be a fallback, not the only way
-  images ever show up.
+- **`media/` wiring is done (see above)**, so this is no longer blocked
+  on anything else - "use the book's own image if it has one" already
+  works, meaning a generated diagram can now genuinely be a fallback for
+  when the book has no useful image of its own, not the only way images
+  ever show up.
 - **Generate at Phase 2 (generation time), not runtime.** The generation
   session already has full Bash/tool access and can write a script,
   actually execute it, inspect the result, and only then save a final
