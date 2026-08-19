@@ -388,6 +388,35 @@ symlinked into `~/.claude/skills/book-to-lab` for discovery. Remote:
   blob get copied, not every image that happened to be nearby in the
   source markdown - see `SKILL.md`'s Phase 2 and "Referencing book
   images" in `app-engine/content/SCHEMA.md`.
+- **Generated diagrams/animations are classified static vs.
+  process/transformation before deciding whether a book image already
+  covers it.** For a static concept (what does X look like), a relevant
+  book image wins outright - generating one is only a fallback for when
+  none exists. For a process concept (how does X become Y), a still
+  image - even the book's own - can only show a snapshot or a
+  before/after pair, not the transformation itself; whether a book
+  image already exists for it doesn't settle whether an animation is
+  worth generating too. Both can coexist: the book's own image still
+  carries its own labels/notation and is what the surrounding prose
+  refers to, the generated animation adds the motion dimension a still
+  image structurally can't. Judgment-gated either way, same failure
+  mode as `short_answer` eligibility and image-referencing before it -
+  this is not a per-blob default.
+- **Diagram generation defaults to hand-authored inline SVG (+CSS
+  `@keyframes` for motion), only executing a script when hand-computed
+  coordinates would be genuinely error-prone** (a real function's
+  curve, a numerically accurate transformation) - and there, `matplotlib`
+  + Pillow's `PillowWriter` (animated GIF, no `ffmpeg` needed) over
+  Manim, which needs system-level dependencies a pip-only venv can't
+  install (still gated behind the still-open invariant-4 question in
+  `FUTURE_WORK.md`). When a script does run, it reuses the *same*
+  isolated skill-tooling venv `convert_pdf.py` already created for
+  `pymupdf` (`<skill_dir>/.venv`) rather than a separate one -
+  `matplotlib`/`pillow` are generation-time tooling, not a per-book or
+  engine dependency, exactly the same category `pymupdf` is; one shared
+  venv for that category beats one per tool. The output (a static PNG
+  or GIF) is saved into `app/static/media/` and referenced exactly like
+  a book image - no schema change, no engine change.
 
 ## Dev workflow
 

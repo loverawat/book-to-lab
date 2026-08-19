@@ -234,6 +234,56 @@ of that paragraph. Images already consumed as `[MATH: ...]` placeholders
 are different - those get transcribed into LaTeX text per the paragraph
 above, never also embedded as images here.
 
+**Optionally, generate a diagram or animation** - but only where a
+visual genuinely clarifies something the prose doesn't; this is not a
+per-blob default, the same way not every blob needs an implementation
+exercise forced onto it. When you're considering one, classify the
+concept first:
+
+- **Static** (what does X look like, a labeled structure, a spatial
+  layout) - a relevant book image (per the paragraph above) already
+  covers this as well as anything generated could. Only generate
+  (inline SVG, see below) when no useful book image exists for it.
+- **Process/transformation** (how does X become Y, what happens as you
+  vary Z, watching a matrix deform a grid, a proof constructing itself)
+  - a still image, even the book's own, can only show a snapshot or a
+  before/after pair; it can't show the transformation happening. Don't
+  let "the book already has an image here" end the discussion for this
+  category - ask instead whether understanding genuinely depends on
+  watching the process unfold, or whether the endpoints alone (which a
+  still image already shows) are enough. If the process itself is the
+  hard part, generate an animation even when a book image already
+  exists for this concept - keep the book's own image too if it's
+  otherwise relevant (it still carries the book's own labels/notation
+  and is what the surrounding prose refers to); the animation adds the
+  motion dimension on top, it doesn't have to replace anything.
+
+When you do generate, default to **hand-authored inline SVG** in
+`reading_html` (`<style>` with `@keyframes` for any motion) - it's just
+markup, no execution, no dependency, same as any other HTML in
+`reading_html`. Only execute a script instead when hand-computed SVG
+coordinates would be genuinely error-prone - plotting a real function's
+curve, a numerically accurate vector/transformation diagram - where
+correctness depends on an actual computation, not something you can
+eyeball. In that case:
+
+```bash
+python3 -m venv <skill_dir>/.venv          # only if it doesn't exist yet
+<skill_dir>/.venv/bin/python3 -m pip install --quiet matplotlib pillow   # only if not already installed
+```
+
+This is the same isolated skill-tooling venv `convert_pdf.py` uses for
+`pymupdf` (see `CLAUDE.md`) - reuse it rather than creating another one;
+neither `matplotlib` nor `pillow` are per-book or engine dependencies,
+they're tooling this generation step itself needs, gone once the image
+is produced. Write your script, run it with
+`<skill_dir>/.venv/bin/python3`, save a static PNG (or an animated GIF,
+via `matplotlib.animation` + Pillow's `PillowWriter`, which needs no
+`ffmpeg`) into `<output_dir>/app/static/media/`, and reference it the
+same way as a book image: `<img src="media/<file>" alt="...">`. Look at
+the result before committing to it - if it doesn't actually clarify the
+concept, don't include it just because you generated it.
+
 For `implementation` exercises, write in the book's detected primary
 language (check `content.json`'s top-level `"language"` field - default
 to `"python"` if the book isn't language-specific; use `"javascript"` if

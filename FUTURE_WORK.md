@@ -198,46 +198,45 @@ Verified end-to-end against a real extracted image (from
 confirmed identical to the source file. `test_engine.sh` has a
 regression check for this now too.
 
-## Generated diagrams/animations per blob
+## Generated diagrams/animations per blob — done
 
-Raised in conversation: for concepts that are fundamentally spatial or
-procedural (a vector, a matrix transformation, a sorting algorithm's
-steps), could generation produce a simple explanatory diagram or
-animation, grounded in the book's own explanation, the same way it
-already produces grounded exercises? Conclusion from that discussion:
+`SKILL.md`'s Phase 2 now has explicit guidance for this, right after
+the book-image-referencing paragraph: judgment-gated (not a per-blob
+default), classifies a concept as static vs. process/transformation
+before deciding whether a book image already covers it (static → book
+image wins outright, generation is only a fallback; process → a still
+image can't show the transformation regardless of whose image it is,
+so an animation can be worth generating even when a relevant book image
+already exists, and the two can coexist), defaults to hand-authored
+inline SVG (+ CSS `@keyframes`), and only executes a script
+(`matplotlib` + Pillow's `PillowWriter`, no `ffmpeg` needed) when
+hand-computed coordinates would be genuinely error-prone. Script
+execution reuses the *same* isolated skill-tooling venv `convert_pdf.py`
+already created for `pymupdf` (`<skill_dir>/.venv`), not a separate one
+- see `CLAUDE.md`'s design-decisions entries for the full reasoning.
+Output is saved into `app/static/media/` and referenced exactly like a
+book image - no schema change, no engine change.
 
-- **`media/` wiring is done (see above)**, so this is no longer blocked
-  on anything else - "use the book's own image if it has one" already
-  works, meaning a generated diagram can now genuinely be a fallback for
-  when the book has no useful image of its own, not the only way images
-  ever show up.
-- **Generate at Phase 2 (generation time), not runtime.** The generation
-  session already has full Bash/tool access and can write a script,
-  actually execute it, inspect the result, and only then save a final
-  static image/GIF into `media/` (or a new `diagrams/` folder),
-  referenced via a plain `<img>` in `reading_html` - same as a real book
-  image once the wiring above exists. The runtime engine should stay out
-  of this entirely: it's deliberately constrained to `claude -p`
-  JSON-in/JSON-out calls (invariant 5), and a concept's diagram doesn't
-  depend on learner progress the way review/synthesis content does, so
-  it doesn't belong in the ephemeral runtime-generation bucket either
-  (invariant 7) - generate once, store as a static file, done.
-- **Prefer hand-authored inline SVG (+ CSS for simple motion) over
-  executing a plotting library, by default.** Needs no new dependency
-  and no execution step - it's just markup, same as `reading_html`
-  today. Reserve actually running a script for cases where hand-computed
-  SVG coordinates would be error-prone - e.g. plotting a real function's
-  curve or a numerically accurate vector diagram - and there,
-  `matplotlib` + Pillow's built-in GIF writer is the right call over
-  something like Manim, which needs system-level dependencies (ffmpeg,
-  cairo) a pip-only per-book venv can't install (same invariant-4
-  tension as the multi-language runner idea above).
-- **Judgment-gate it, don't default it on.** This has the same failure
-  mode the `short_answer` interpretation fix was addressing: if
-  `SKILL.md` says "add a diagram," it'll add one to every blob whether
-  or not the concept benefits, the same way every blob defaulted to a
-  Python implementation before. Only worth it where a visual actually
-  clarifies something prose doesn't - not a per-blob requirement.
+Verified end-to-end, not just written: a hand-authored inline SVG (a
+vector-addition animation using `<animate>`) confirmed well-formed XML
+and round-trips through `/api/content` intact; a real `matplotlib`
+script (a rotating vector via `FuncAnimation` + `PillowWriter`) was
+actually run through the reused skill venv, produced a genuine 30-frame
+GIF (verified frame-by-frame, one frame visually inspected), and served
+correctly over HTTP with the right content-type. `test_engine.sh`'s
+existing 25 checks still pass unchanged (no engine code was touched -
+this feature needed none).
+
+**Not verified:** a live Phase 2 generation session has never actually
+exercised this guidance on a real book - whether a real generation
+session correctly judges static-vs-process, correctly decides when a
+book image is "enough" vs. when an animation adds real value, and
+produces SVG/`matplotlib` output that's actually well-designed (not
+just mechanically valid) is untested, same category of gap as the PDF
+math-transcription instruction.
+
+Manim (real math-animation quality) is still explicitly out of scope -
+see "Relaxing invariant 4" below, unchanged.
 
 ## Relaxing invariant 4 (zero required setup beyond pandoc + python3)
 
