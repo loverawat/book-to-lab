@@ -1,18 +1,28 @@
 ---
 name: book-to-lab
-description: Converts an epub book into an implementation-focused local learning web app - reading is chunked into small concepts, each paired with a hands-on exercise, gated progression, progressive hints, spaced review, and a prerequisite knowledge graph. Takes the epub path and an optional output folder (defaults to ~/BookLabs/<book-slug>/). Use when the user gives an epub and wants to learn it by building instead of just reading.
+description: Converts an epub or PDF book into an implementation-focused local learning web app - reading is chunked into small concepts, each paired with a hands-on exercise, gated progression, progressive hints, spaced review, and a prerequisite knowledge graph. Takes the book path and an optional output folder (defaults to ~/BookLabs/<book-slug>/). Use when the user gives an epub or PDF and wants to learn it by building instead of just reading.
 ---
 
 # book-to-lab
 
-Turn a passive epub into an active, implementation-first local web app for
-one specific book. This skill has two phases: a mechanical conversion
-(scripted) and a generation phase that requires your judgment (no script
-can do this part - it's genuine reading comprehension and exercise design).
+Turn a passive epub or PDF into an active, implementation-first local web
+app for one specific book. This skill has two phases: a mechanical
+conversion (scripted) and a generation phase that requires your judgment
+(no script can do this part - it's genuine reading comprehension and
+exercise design).
+
+PDF conversion is meaningfully less reliable than epub's - epub has a real
+spine/manifest and (usually) semantic math markup; PDF has neither, so
+chapter structure is inferred and math is detected/rasterized rather than
+extracted as text. See Phase 1's PDF branch and CLAUDE.md for what that
+means in practice and why. Prefer epub when both are available for the
+same book.
 
 ## Inputs
 
-- `epub_path`: path to the source `.epub` file (ask the user if not given).
+- `book_path`: path to the source `.epub` or `.pdf` file (ask the user if
+  not given). Which conversion script runs is determined by this file's
+  extension - see Phase 1.
 - `output_dir` (optional): where to put everything for this book - the
   converted markdown, media, and the generated app. If the user doesn't
   give one, default to `~/BookLabs/<book-slug>/`, where `<book-slug>` is
@@ -32,8 +42,8 @@ Everything for this book goes in `<output_dir>`:
 ```
 <output_dir>/
 ├── markdown/            # converted chapters, one file per chapter
-├── media/                # extracted images, flat
-├── manifest.json         # title, author, ordered chapter list
+├── media/                # extracted images, flat (+ rasterized math regions, PDF only)
+├── manifest.json         # title, author, ordered chapter list, chapter_confidence (PDF only)
 └── app/                  # the runnable web app for this book
     ├── server.py          # copied from app-engine/, unmodified
     ├── static/             # copied from app-engine/static/, unmodified
@@ -41,7 +51,38 @@ Everything for this book goes in `<output_dir>`:
         └── content.json    # THIS is what you generate - see below
 ```
 
+## Phase 0 - Check dependencies (mechanical, use the script)
+
+```bash
+python3 <skill_dir>/scripts/check_dependencies.py
+```
+
+This checks for `pandoc` (required - Phase 1 can't run without it),
+plus `node` and `claude` CLI (optional - only relevant to the book
+you're about to generate, not to running this skill itself: `node` is
+only needed if the book turns out JS-focused, `claude` is only needed
+for the generated app's live grading/review/synthesis features, which
+degrade gracefully without it per invariant 8 in `CLAUDE.md`).
+
+- If a **required** tool is missing, the script exits non-zero and
+  prints the exact install command for the detected platform. Stop
+  here, show the user what's missing and the command to fix it, and
+  offer to run it yourself via your own Bash tool - which will go
+  through the normal confirm-before-running flow, not silently. Don't
+  install anything without that confirmation (see invariant 9). Once
+  it's installed, re-run the check before moving to Phase 1.
+- If only **optional** tools are missing, don't block - just note it to
+  the user in your final summary (e.g. "claude CLI wasn't found - live
+  grading features in the app won't work until it's installed") and
+  continue to Phase 1.
+
 ## Phase 1 - Conversion (mechanical, use the script)
+
+Which script runs depends on `book_path`'s extension - everything after
+this phase is identical regardless of which one ran, since both produce
+the same `markdown/`/`media/`/`manifest.json` shape.
+
+### If `book_path` ends in `.epub`
 
 ```bash
 python3 <skill_dir>/scripts/convert_epub.py <epub_path> <output_dir>
@@ -51,6 +92,49 @@ This unzips the epub, walks its spine (real reading order from the epub's
 own manifest, not heading-guessing), converts each chapter to markdown via
 pandoc, and copies+flattens all images into `media/` with links rewritten
 to match. It writes `manifest.json` with the ordered chapter list.
+
+### If `book_path` ends in `.pdf`
+
+```bash
+python3 <skill_dir>/scripts/convert_pdf.py <pdf_path> <output_dir>
+```
+
+This has no epub-equivalent structural guarantees to lean on, so it does
+its best mechanically and tells you how confident it is:
+
+- **Chapter structure**: uses the PDF's own outline/bookmarks if present
+  (as trustworthy as epub's spine). If there's no outline, falls back to
+  a font-size + pattern heuristic (large, isolated, chapter-pattern-like
+  lines) to guess chapter breaks. If that finds nothing usable either,
+  the whole PDF becomes one chapter. `manifest.json` records which of
+  these happened as `"chapter_confidence"`: `"outline"` / `"heuristic"`
+  / `"none"`. **If it's not `"outline"`, treat the "chapter converts
+  oddly, skim and use judgment" note below as required, not optional** -
+  read through the actual chapter boundaries the heuristic produced
+  before trusting them, and manually re-split (move text between chapter
+  files, rename `manifest.json` entries) if a break is clearly wrong or
+  clearly missing. A heuristic split is a guess, not a fact.
+- **Math**: PDFs (unlike epub) essentially never have semantic math
+  markup - text extraction of a real equation produces garbled text, not
+  usable LaTeX. Spans set in a known math-typesetting font (Computer
+  Modern, Latin Modern Math, STIX, etc.) are detected and rasterized to
+  an image in `media/` instead, with a `[MATH: media/pdf_eq_NNN.png]`
+  placeholder left in the markdown in their place. **When you hit one of
+  these placeholders during Phase 2, read that image directly** (your
+  Read tool handles images) and transcribe what it shows into real
+  `$...$`/`$$...$$` LaTeX in the relevant `content.json` field - the same
+  move already used for an epub that embeds an equation as a plain
+  image, just now the default path for PDF math instead of a rare edge
+  case. Only fall back to describing it in words (per the existing
+  image-equation guidance below) if the rasterized image is genuinely
+  illegible.
+- Not every equation will be caught - the font-name detection only
+  recognizes common LaTeX/professional-typesetting math fonts, not every
+  way a PDF might embed math (e.g. Word's own equation editor uses
+  different fonts entirely). If you notice garbled, clearly-mathematical
+  text that wasn't flagged, treat it like an image-embedded equation:
+  describe what it establishes in words using the surrounding prose,
+  rather than guessing at a LaTeX transcription from garbled text.
 
 Read `manifest.json` afterward to know how many chapters you have and
 their titles - you'll need this for phase 2.
@@ -126,11 +210,12 @@ If the chapter contains real mathematical notation, write it as LaTeX
 using `$...$` for inline math and `$$...$$` for display equations in
 `reading`, `prompt`, `hints`, and `expected_answer` - the app renders
 this (KaTeX) in every place these fields are shown. If the source epub
-represents an equation as an image rather than as text/MathML, note in
-`reading` what the equation shows in words rather than skipping it
-silently - you can't see the image directly from the converted markdown,
-but the surrounding prose usually describes what it establishes well
-enough to explain in words.
+represents an equation as an image rather than as text/MathML, read that
+image directly (in `media/`, linked from the markdown) and transcribe it
+into LaTeX the same way described for PDF math placeholders in Phase 1 -
+don't skip it silently. If it's illegible even as an image, fall back to
+describing in `reading` what the equation establishes in words; the
+surrounding prose usually makes that possible.
 
 For `implementation` exercises, write in the book's detected primary
 language (check `content.json`'s top-level `"language"` field - default

@@ -3,20 +3,32 @@
 Context for a Claude Code session working *on this repo* (developing the
 skill itself). For what the skill does and how a user runs it, see
 `README.md`. For the step-by-step workflow the skill follows when
-invoked on a book, see `SKILL.md`.
+invoked on a book, see `SKILL.md`. For open ideas and possible future
+work not yet committed to, see `FUTURE_WORK.md` — check it before
+starting speculative/exploratory work, and add to it rather than losing
+an idea discussed in conversation but not acted on.
 
 ## What this repo is
 
-A Claude Code skill (`book-to-lab`) that converts an epub into a local,
-implementation-first learning web app. Two moving parts:
+A Claude Code skill (`book-to-lab`) that converts an epub or PDF into a
+local, implementation-first learning web app. Two moving parts:
 
 - **The engine** (`app-engine/`) — generic, book-agnostic. Same
   Python-stdlib server + plain HTML/CSS/JS frontend runs for every book.
 - **The generation instructions** (`SKILL.md`) — what a Claude Code
-  session does, live, when given a specific epub: converts it, then
+  session does, live, when given a specific book: converts it, then
   reads the converted markdown chapter by chapter and writes
   `content.json` (the one file that makes the engine specific to that
   book).
+
+Conversion (Phase 1) is genuinely two independent scripts —
+`convert_epub.py` and `convert_pdf.py` — but generation (Phase 2) is not
+input-format-aware at all: both scripts produce the identical
+`markdown/`/`media/`/`manifest.json` shape, so everything after Phase 1
+works the same regardless of which one ran. All of PDF's real complexity
+(structure inference, math-as-image) is quarantined inside
+`convert_pdf.py`; see its design-decisions entries below before touching
+either conversion script.
 
 Generated book output (converted markdown + that book's copy of the app,
 filled with real `content.json`) never lives in this repo — it goes to
@@ -56,7 +68,14 @@ symlinked into `~/.claude/skills/book-to-lab` for discovery. Remote:
    add an external requirement, it just costs a one-time local install
    into that book's own `.venv`. Don't add a *required* third-party
    dependency to `server.py` itself without a strong reason — it breaks
-   the "just clone and run" story in the README.
+   the "just clone and run" story in the README. This is now *verified*
+   rather than silently assumed: `scripts/check_dependencies.py` runs as
+   `SKILL.md`'s Phase 0 and checks for `pandoc` (required) plus `node`
+   and `claude` CLI (optional — known dependencies of specific features,
+   not of the skill itself: `node` only if the book turns out
+   JS-focused, `claude` only for the generated app's live grading/
+   review/synthesis, which already degrades gracefully without it per
+   invariant 8).
 5. **Grading that needs a live LLM call goes through the `claude` CLI
    subprocess, never a raw Anthropic API key.** The CLI rides on the
    user's existing Claude Code login/subscription; a raw API key would
@@ -81,6 +100,14 @@ symlinked into `~/.claude/skills/book-to-lab` for discovery. Remote:
    return a clean error response (or, for `/api/review-due`, fall back
    to the static stored exercise) rather than letting an LLM hiccup break
    the endpoint.
+9. **Dependency installation is proposed, never silent.**
+   `scripts/check_dependencies.py` may detect a missing tool and print
+   the right install command for the platform, but it must never run a
+   package manager unprompted, and `SKILL.md`'s Phase 0 instructions say
+   so explicitly. Running one is a hard-to-reverse, often-sudo-requiring
+   action — offering to run it through Claude Code's own confirm-before-
+   running flow is the mechanism, not a background retry loop. Don't
+   reintroduce silent auto-install for convenience.
 
 ## Design decisions and why (so they don't get re-litigated)
 
@@ -175,6 +202,45 @@ symlinked into `~/.claude/skills/book-to-lab` for discovery. Remote:
   through a different interpreter. If real security isolation (untrusted
   code, not just untrusted package lists) is ever needed, that's a
   separate, bigger decision (containers/VMs) — don't conflate the two.
+  `venv_python()` checks both the POSIX (`bin/python3`) and Windows
+  (`Scripts/python.exe`) venv layouts rather than branching on
+  `sys.platform` — it previously only checked the POSIX path, so on
+  Windows the interpreter was never found. `ensure_venv()` had the same
+  problem one level up: it resolved `pip` via a hardcoded
+  `VENV_DIR / "bin" / "pip"` and ran it with `check=True`, uncaught, in
+  `main()` — so on Windows this wasn't a graceful fallback, it crashed
+  the server outright on startup for any book with declared
+  `dependencies`, before ever printing "book-to-lab running at...".
+  Fixed by switching to `<interpreter> -m pip install ...` through
+  `venv_python()` instead of resolving a separate pip path — sidesteps
+  needing a second POSIX/Windows lookup entirely. `ensure_venv()` also
+  now gates on `VENV_DEPS_MARKER` (a file written only after `pip
+  install` actually succeeds), not on `VENV_DIR` existing — venv
+  creation happens before packages are installed into it, so an
+  interrupted first run (network blip, Ctrl+C, one bad package name)
+  used to leave a venv that looked "already set up" forever, with the
+  missing packages only ever surfacing later as a confusing
+  `ModuleNotFoundError`; now a missing marker triggers a retry that
+  reuses the existing interpreter instead of recreating the venv.
+  Verified end-to-end (fresh install, recovery from a simulated
+  interrupted install, and a no-op third run) against a real throwaway
+  dependency (`six`) on macOS; the Windows-specific paths in both
+  functions are still logic-verified only, not run on an actual Windows
+  machine — none was available to verify against.
+- **`scripts/check_dependencies.py` is a flat, hardcoded list of exactly
+  the tools this skill depends on** (`pandoc`, `node`, `claude` CLI —
+  not `python3`, which the script needs just to run, so its own absence
+  can't be reported by it), not a general package-manager abstraction.
+  Deliberately not built: distro detection across
+  apt/dnf/pacman/zypper/apk (some Linux systems have several installed
+  at once, so "detect the right one" isn't reliably answerable, and a
+  flat "here's the Debian/Ubuntu command, otherwise see the docs" covers
+  the realistic case at a fraction of the complexity), and support for
+  multiple Windows installer ecosystems (winget/Chocolatey/Scoop) as
+  interchangeable — winget is what's built into modern Windows, that's
+  the one suggested. Add a tool to the list when a real feature needs
+  it, not preemptively (see invariant 4, and the still-open "relaxing
+  invariant 4" question in `FUTURE_WORK.md`).
 - **Math rendering is KaTeX, vendored into `app-engine/static/vendor/katex/`**
   (~600KB: `katex.min.js`, `katex.min.css`, `contrib/auto-render.min.js`,
   woff2 fonts only — ttf/woff fallbacks dropped, every `@font-face` rule
@@ -202,6 +268,107 @@ symlinked into `~/.claude/skills/book-to-lab` for discovery. Remote:
   node and serializes cleanly instead. `demo/linear-algebra-demo-book.epub`
   simulates that correctly (markdown-with-$...$ → pandoc → MathML →
   wrapped as the epub's XHTML), not with hand-typed dollar signs.
+- **`convert_pdf.py` gets its own isolated venv, separate from both
+  invariant 4 and any book's per-book venv** (`<skill_dir>/.venv`,
+  self-bootstrapped by the script itself via `_relaunch_in_skill_venv()`
+  before it ever imports `pymupdf`). This is a third category, distinct
+  from the other two venvs already in this codebase: the per-book venv
+  (`ensure_venv()` in `server.py`) isolates a *generated book's exercise*
+  dependencies; this one isolates a dependency of the *skill's own
+  conversion tooling*, used once at Phase 1, never touched by the
+  running app or any book's exercises. Mixing it into the per-book venv
+  would conflate two different lifecycles and consumers. Converting only
+  epubs never creates this venv or needs `pymupdf` at all.
+  Installing `pymupdf` here is *not* gated behind the guided-install
+  flow (invariant 9) the way `pandoc`/`node`/`claude` are — that
+  distinction matters: invariant 9 is about system-level package-manager
+  actions (often sudo, hard to reverse); a `pip install` into a private,
+  trivially-deletable venv is neither, and `ensure_venv()` already
+  installs a book's own declared dependencies the same way, without
+  asking. Only the venv-*python* check needed the fix
+  `venv_python()` got — see below.
+- **`convert_pdf.py` detects "am I already running inside the skill
+  venv" via `sys.prefix`, not by comparing `sys.executable` paths.**
+  Found by testing, not assumed: a venv's own interpreter binary is
+  typically a symlink back to the base Python install, so
+  `Path(sys.executable).resolve()` collapses to the *same file* whether
+  or not the venv is active, making a path-equality check always true
+  and silently skipping the re-exec into the venv entirely.
+  `sys.prefix` reflects which environment's site-packages is actually
+  active regardless of that symlink, and doesn't have this problem.
+- **PDF chapter structure is inferred in three tiers, most-trustworthy
+  first, with the result recorded as `chapter_confidence` in
+  `manifest.json`**: the PDF's own outline/bookmarks
+  (`get_outline_chapters`) if present — as trustworthy as epub's spine;
+  a font-size + regex-pattern heuristic (`find_heading_candidates`) if
+  not, requiring two corroborating signals (meaningfully larger than
+  body text size *and* either a chapter-like pattern or dramatically
+  larger) before flagging a heading candidate, to avoid treating every
+  bolded pull-quote as a chapter start; a single whole-document
+  "chapter" as the last resort. The confidence value exists so Phase 2
+  knows how much to trust the split it's been handed — see `SKILL.md`'s
+  PDF branch, which upgrades the epub-era "skim and use judgment" aside
+  into a required step whenever confidence isn't `outline`. Not treated
+  as a failure state: Phase 2 already does judgment-based concept
+  chunking within a chapter regardless of size, so a coarse single-
+  chapter split degrades gracefully rather than breaking anything.
+- **Running header/footer detection (`find_boilerplate_lines`) must be
+  computed document-wide, not per-chapter.** Found by testing, not
+  assumed: an early version computed it while assembling each chapter
+  individually, and a 2-page chapter's page-number footer never had
+  enough occurrences (needs ≥3, or ≥40% of pages) to be recognized as
+  boilerplate — it only ever repeats often enough to detect across the
+  *whole* document. Fixed by extracting every page once up front in
+  `main()`, computing the boilerplate set from all of it, then having
+  each chapter's assembly step only slice and filter that pre-extracted
+  data rather than re-deriving its own local signal.
+- **Per-page extraction returns one combined list of `(plain_text,
+  markdown_text)` pairs, not two separately-grown parallel lists.**
+  Found by testing, not assumed: an earlier version kept `plain_lines`
+  and `md_parts` as two lists built in the same loop, but an image block
+  only appended to `md_parts` (it has no plain-text line of its own) —
+  so on any page containing an image, the two lists silently drifted out
+  of index alignment, and boilerplate-line filtering silently corrupted
+  for everything after the image on that page (a real running footer
+  stopped being recognized). One combined list, growing one entry per
+  line/image in lockstep, makes that class of bug structurally
+  impossible rather than something to keep getting right by convention.
+- **PDF math is detected by embedded font name and rasterized to an
+  image, not extracted or reconstructed as text** (`is_math_font`,
+  `MediaWriter.save_math`) — real math-typesetting font families
+  (Computer Modern, Latin Modern Math, STIX, etc.) are a decades-stable,
+  well-documented naming convention, and a PDF's extracted text for an
+  equation is otherwise just garbled glyph order with no fraction/
+  exponent structure. Deliberately *not* attempting automated LaTeX
+  reconstruction (Mathpix-style OCR, or a local math-OCR model) — that
+  would be a real new dependency (an API, or a heavy ML model) for a
+  problem that already has a good answer: Phase 2 generation is done by
+  a live, multimodal Claude Code session, so it can just read the
+  rasterized equation image directly (`Read` already handles images)
+  and transcribe it into LaTeX itself, extending the existing epub
+  image-equation fallback rather than building new machinery. See
+  `SKILL.md`'s PDF branch. The font-name list is implemented from
+  documented naming conventions and validated against a synthetic test
+  (a real font file renamed via `fontTools` to a known math-font name,
+  see `demo/pdf-math-demo-book.pdf`) that exercises the same detection
+  code path — **not** verified against a real LaTeX-produced PDF, since
+  no LaTeX distribution was available to generate one in this
+  environment. Won't catch every way a PDF embeds math (e.g. Word's own
+  equation editor uses different fonts); `SKILL.md` tells the generation
+  session to fall back to describing garbled-but-clearly-mathematical
+  text in words if it notices detection missed something.
+- **PDF demo fixtures are self-authored via `pymupdf` directly, not
+  built from a real book** (`demo/pdf-demo-book.pdf`,
+  `demo/pdf-no-outline-demo-book.pdf`, `demo/pdf-math-demo-book.pdf`) -
+  same reasoning as the epub demos (public-domain, deliberately small,
+  each isolates one thing: real outline + image + header/footer
+  stripping; no outline at all; one math region). The math demo's font
+  was produced by taking a real system font file and renaming its
+  internal name-table records to a known math-font name via `fontTools`
+  (subsetted down to just the glyphs used, ~5KB, to keep the fixture
+  small) - this validates the font-name-detection code path faithfully
+  but is not the same as validating against a document real LaTeX
+  actually produced.
 
 ## Dev workflow
 
@@ -214,6 +381,13 @@ asserts the responses, and tears itself down:
 ```bash
 scripts/test_engine.sh
 ```
+
+`scripts/check_dependencies.py` (Phase 0 of `SKILL.md`) can be run
+standalone too - `python3 scripts/check_dependencies.py` - useful when
+touching its tool list or hint text without running the whole skill.
+Its Windows branch (and `venv_python()`'s) can only be verified by
+logic/read-through in this environment - there's no Windows machine
+here to actually run either against.
 
 It's a regression check, not exhaustive — if you add a new endpoint or
 field, add a `check` line for it in the same script rather than only
@@ -255,7 +429,35 @@ what exercises the `-t markdown` (not `-t gfm`) fix in `convert_epub.py`
 correctly instead of accidentally testing something a real book would
 never actually produce.
 
-None of the three demos' generated `content.json` is committed here
+Three more, self-authored, exercise `convert_pdf.py` specifically —
+epub's demos don't touch any of PDF's failure modes at all, so these
+exist to isolate them one at a time:
+
+```bash
+python3 scripts/convert_pdf.py demo/pdf-demo-book.pdf /tmp/demo-pdf-out
+python3 scripts/convert_pdf.py demo/pdf-no-outline-demo-book.pdf /tmp/demo-pdf-out-2
+python3 scripts/convert_pdf.py demo/pdf-math-demo-book.pdf /tmp/demo-pdf-out-3
+```
+
+`demo/pdf-demo-book.pdf` (~28KB, 3 chapters/1 image) has a real
+outline/bookmarks set via `doc.set_toc()` — the happy path. Checks
+outline-based chapter splitting, image extraction, and running
+header/footer stripping (`manifest.json` should report
+`"chapter_confidence": "outline"`).
+
+`demo/pdf-no-outline-demo-book.pdf` (~4KB, 2 chapters) deliberately has
+no outline at all (`doc.set_toc()` is never called), forcing the
+font-size/pattern heuristic fallback. Checks that `chapter_confidence`
+correctly comes back `"heuristic"` and that the two large-font heading
+lines are actually found as chapter starts.
+
+`demo/pdf-math-demo-book.pdf` (~8KB, 1 chapter) has one equation set in
+a font renamed to a known math-font name via `fontTools` (see the
+design-decisions note on this above) — checks that the math span gets
+rasterized into `media/` with a `[MATH: ...]` placeholder left in its
+place, instead of extracted as garbled text.
+
+None of the six demos' generated `content.json` is committed here
 (see the repo-scope note above) — generate it fresh into a scratch
 `output_dir` when you need it for manual testing.
 
@@ -279,12 +481,18 @@ they'll drift out of sync:
 ```
 SKILL.md                          workflow Claude follows per-book
 README.md                         user-facing docs
+FUTURE_WORK.md                    open ideas / possible future work, not yet committed to
 LICENSE                           MIT
+scripts/check_dependencies.py     Phase 0 preflight - checks pandoc/node/claude, never installs
 scripts/convert_epub.py           epub -> markdown + media (spine order, pandoc)
+scripts/convert_pdf.py            PDF -> markdown + media (inferred structure, math as images, pymupdf)
 scripts/test_engine.sh            automated regression check for server.py
 demo/tiny-demo-book.epub          tiny self-authored PD epub, for pipeline sanity checks
 demo/number-theory-demo-book.epub bigger self-authored PD epub (math+code), for generation/feature testing
 demo/linear-algebra-demo-book.epub biggest demo, real embedded MathML, for testing math rendering
+demo/pdf-demo-book.pdf            self-authored PD PDF w/ real outline+image, PDF happy-path testing
+demo/pdf-no-outline-demo-book.pdf self-authored PD PDF w/ no outline, tests the heuristic chapter split
+demo/pdf-math-demo-book.pdf       self-authored PD PDF w/ one math region, tests math font-detection
 app-engine/server.py              generic server: content, submit, hint, review, graph, progress
 app-engine/static/                generic frontend (index.html, app.js, style.css)
 app-engine/static/vendor/katex/   vendored KaTeX (math rendering), not a CDN

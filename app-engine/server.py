@@ -37,27 +37,51 @@ STATIC_DIR = ROOT / "static"
 CONTENT_PATH = ROOT / "content" / "content.json"
 PROGRESS_PATH = ROOT / "content" / "progress.json"
 VENV_DIR = ROOT / ".venv"
+VENV_DEPS_MARKER = VENV_DIR / ".deps_installed"
 
 EXEC_TIMEOUT_SECS = 10
 
 
 def venv_python():
-    """Path to this book's isolated interpreter, if one has been set up."""
-    candidate = VENV_DIR / "bin" / "python3"
-    return str(candidate) if candidate.exists() else None
+    """Path to this book's isolated interpreter, if one has been set up.
+    Checks both the POSIX venv layout (bin/python3) and the Windows one
+    (Scripts/python.exe) rather than branching on sys.platform - only
+    one will ever exist, so checking both is simpler than getting
+    platform detection right, and works even if a venv somehow gets
+    copied between OSes."""
+    for candidate in (VENV_DIR / "bin" / "python3", VENV_DIR / "Scripts" / "python.exe"):
+        if candidate.exists():
+            return str(candidate)
+    return None
 
 
 def ensure_venv(content):
     """Lazily create a per-book venv the first time a book declares
-    third-party dependencies. No-op for books that only need the
-    standard library, and no-op on every run after the first."""
+    third-party dependencies, and (re)install its packages if a
+    previous attempt left a partial venv behind. No-op for books that
+    only need the standard library.
+
+    Gates on VENV_DEPS_MARKER, written only after a successful install,
+    rather than on VENV_DIR existing: venv creation happens before
+    packages are installed into it, so an interrupted first run
+    (network blip, Ctrl+C, one bad package name) would otherwise leave
+    a venv directory that's treated as "already set up" forever, with
+    the missing packages only ever surfacing later as a confusing
+    ModuleNotFoundError.
+
+    Installs via `<interpreter> -m pip install ...` rather than
+    resolving a separate pip binary path - avoids needing a second
+    cross-platform path lookup alongside venv_python() (pip's own
+    layout differs between bin/pip and Scripts/pip.exe the same way
+    the interpreter's does)."""
     deps = content.get("dependencies", [])
-    if not deps or VENV_DIR.exists():
+    if not deps or VENV_DEPS_MARKER.exists():
         return
     print(f"Setting up an isolated environment for this book's dependencies ({', '.join(deps)})...")
-    subprocess.run([sys.executable, "-m", "venv", str(VENV_DIR)], check=True)
-    pip = str(VENV_DIR / "bin" / "pip")
-    subprocess.run([pip, "install", "--quiet", *deps], check=True)
+    if not venv_python():
+        subprocess.run([sys.executable, "-m", "venv", str(VENV_DIR)], check=True)
+    subprocess.run([venv_python(), "-m", "pip", "install", "--quiet", *deps], check=True)
+    VENV_DEPS_MARKER.write_text("ok", encoding="utf-8")
     print("Done - this only happens once for this book.")
 
 

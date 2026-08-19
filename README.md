@@ -1,7 +1,7 @@
 # book-to-lab
 
 A [Claude Code](https://claude.com/claude-code) skill that turns any epub
-book into a local, implementation-focused learning web app: instead of
+or PDF book into a local, implementation-focused learning web app: instead of
 just reading, you get the concept in a small chunk, immediately build/do
 something with it, and only move on once you've actually passed the
 exercise. Past concepts resurface for spaced review as you go, and you
@@ -10,9 +10,16 @@ graph for any concept, several levels deep.
 
 ## What it does
 
-1. **Converts** your epub into per-chapter markdown + a flat `media/`
-   folder of images, using the epub's own spine (real chapter order),
-   not heading-guessing.
+1. **Converts** your book into per-chapter markdown + a flat `media/`
+   folder of images. For epub, using the epub's own spine (real chapter
+   order), not heading-guessing. For PDF - which has no spine to read -
+   chapter structure comes from the PDF's outline/bookmarks if it has
+   one, or a best-effort heuristic if it doesn't (and that's flagged in
+   `manifest.json` so the generation step knows how much to trust it);
+   equations are detected by font and turned into images rather than
+   garbled text, then transcribed into real LaTeX during generation.
+   PDF conversion is inherently less reliable than epub's - prefer epub
+   when you have the choice.
 2. **Generates** a content pack for the book: each chapter broken into
    small concept "blobs," each paired with either a hands-on
    implementation exercise (default) or, only when code would be
@@ -61,6 +68,12 @@ or other sources get mixed in, by design.
   requires reading comprehension - no script can do that part.
 - `scripts/convert_epub.py` - epub -> markdown + media, using only
   `pandoc` and the Python standard library.
+- `scripts/convert_pdf.py` - PDF -> markdown + media, using `pymupdf`.
+  Unlike everything else in this skill, that's a real third-party
+  dependency - but it's scoped to this one script's own isolated venv
+  (`<skill_dir>/.venv`, created automatically the first time you convert
+  a PDF), not to the skill as a whole or to any generated book's app.
+  Converting only epubs never touches it.
 - `app-engine/` - the generic, book-agnostic local web app (Python
   stdlib server + plain HTML/CSS/JS frontend, no `pip install`, no
   build step - the one vendored exception is KaTeX in
@@ -81,6 +94,10 @@ lives.
 - `python3` (stdlib only, nothing to `pip install`)
 - `node` - only if you convert a JavaScript-focused book (exercises run
   in the book's own primary language; Python is the default)
+- Nothing extra to install for PDF input either - `pymupdf` is needed
+  only by `scripts/convert_pdf.py`, and it's installed automatically
+  into that script's own isolated venv the first time you convert a
+  PDF (see "How it's built"). Converting only epubs never touches it.
 - `claude` CLI on your `PATH` and logged in (rides on your existing
   Claude Code login/subscription, not a separate API key) - needed for
   most of what makes this "implementation-focused" rather than a plain
@@ -126,7 +143,9 @@ claude "use the book-to-lab skill on ~/Books/some-book.epub"
 ```
 
 Either way works from any directory - skills in `~/.claude/skills/` are
-discovered globally, not tied to a project folder.
+discovered globally, not tied to a project folder. A `.pdf` path works
+exactly the same way; conversion quality is just lower than epub's (see
+"What it does" above).
 
 By default everything for that book (converted markdown, media, and the
 generated app) lands in `~/BookLabs/<book-slug>/`. To put it somewhere
@@ -219,6 +238,31 @@ python3 scripts/convert_epub.py demo/linear-algebra-demo-book.epub /tmp/demo-out
   MathML (not plain-text dollar signs - the same way a real math
   textbook's epub represents equations). Use this one to check the
   math-rendering pipeline specifically.
+
+Three more, self-authored, for the PDF path specifically - each isolates
+one part of what makes PDF conversion different from epub's:
+
+```bash
+python3 scripts/convert_pdf.py demo/pdf-demo-book.pdf /tmp/demo-pdf-out
+python3 scripts/convert_pdf.py demo/pdf-no-outline-demo-book.pdf /tmp/demo-pdf-out-2
+python3 scripts/convert_pdf.py demo/pdf-math-demo-book.pdf /tmp/demo-pdf-out-3
+```
+
+- `demo/pdf-demo-book.pdf` (~28KB) - a well-structured PDF with real
+  outline/bookmarks and an embedded image. The "happy path" - checks
+  outline-based chapter splitting, image extraction, and running
+  header/footer stripping.
+- `demo/pdf-no-outline-demo-book.pdf` (~4KB) - deliberately has no
+  outline at all, to exercise the font-size/pattern heuristic fallback
+  and confirm `manifest.json` correctly reports
+  `"chapter_confidence": "heuristic"`.
+- `demo/pdf-math-demo-book.pdf` (~8KB) - has one equation set in a font
+  named like a real LaTeX math font (via a renamed, subsetted font file
+  - there's no LaTeX distribution involved in building this fixture, it
+  just exercises the same font-name-based detection code path a real
+  LaTeX-produced PDF's math would). Checks that the equation gets
+  rasterized into `media/` with a `[MATH: ...]` placeholder left in its
+  place, rather than extracted as garbled text.
 
 ## License
 
