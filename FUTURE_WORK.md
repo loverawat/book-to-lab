@@ -171,16 +171,13 @@ progression, extras are supplementary — matches invariant 6, "only the
 primary exercise gates"), and `SKILL.md` guidance for when a second
 authored question earns its place versus just adding busywork.
 
-## Knowledge graph depth — unverified, not yet a confirmed gap
+## Knowledge graph depth — verified, not a gap
 
-Flagged in conversation: the prerequisite graph appeared to only show 1
-level deep when checked on an early blob. Likely expected — early
-concepts legitimately have few or no prerequisites — but not yet
-confirmed against a concept several chapters into a book. `build_graph`
-/`expand` in `server.py` already walks up to `depth` (default 4 via
-`show-graph-btn`) if a blob's `prerequisites` chain actually goes that
-deep. Re-check on a later concept before treating this as a real gap;
-don't touch the graph code on the strength of the depth-1 case alone.
+Confirmed: checked on a concept several chapters into a book, and the
+prerequisite graph correctly shows multiple levels, not just 1. The
+earlier depth-1 observation was exactly what was already suspected - an
+early blob legitimately has few or no prerequisites, not a bug in
+`build_graph`/`expand` in `server.py`. No code change needed.
 
 ## Extracted book images are never actually shown (dead `media/`) — done
 
