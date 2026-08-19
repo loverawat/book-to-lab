@@ -128,6 +128,20 @@ body {
   gap: 10px;
 }
 #checkpoint-nudge-text { color: var(--text-dim); font-size: 13px; }
+#extra-questions-nudge { margin-bottom: 10px; }
+.extra-question-row {
+  background: var(--bg-alt);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 10px 14px;
+  margin-bottom: 6px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+  font-size: 13px;
+  color: var(--text-dim);
+}
 #reading-text { line-height: 1.6; }
 #reading-text pre { background: var(--bg-alt); padding: 10px; border-radius: 6px; overflow-x: auto; }
 #reading-text img { max-width: 100%; }
@@ -135,7 +149,8 @@ body {
 #next-btn, #reveal-answer-btn, #got-it-btn, #missed-it-btn, #graph-close-btn,
 #review-banner-go, #skip-btn, #grade-answer-btn, #submit-follow-up-btn,
 #review-submit-btn, #synthesis-submit-btn, #review-close-btn, #synthesis-close-btn,
-#checkpoint-nudge-btn {
+#checkpoint-nudge-btn, #extra-submit-btn, #extra-skip-btn, #extra-close-btn,
+.extra-question-row button {
   font: inherit;
   border: 1px solid var(--border);
   background: var(--bg-alt);

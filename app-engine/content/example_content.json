@@ -23,7 +23,22 @@
               "Return i as soon as items[i] == target; if the loop finishes, return -1."
             ],
             "reference_solution": "def linear_search(items, target):\n    for i, value in enumerate(items):\n        if value == target:\n            return i\n    return -1\n"
-          }
+          },
+          "extra_questions": [
+            {
+              "type": "implementation",
+              "prompt": "Implement count_occurrences(items, target) returning how many times target appears in items.",
+              "starter_code": "def count_occurrences(items, target):\n    # your implementation here\n    pass\n",
+              "test_code": "from solution import count_occurrences\nassert count_occurrences([5, 3, 8, 3, 3], 3) == 3\nassert count_occurrences([5, 3, 8], 9) == 0\nprint('ok')",
+              "hints": ["Walk the list once, same as linear_search, but keep counting instead of returning early."],
+              "reference_solution": "def count_occurrences(items, target):\n    return sum(1 for value in items if value == target)\n"
+            },
+            {
+              "type": "short_answer",
+              "prompt": "Why is linear search's worst-case time still O(n) even though it sometimes finds the target on the very first comparison?",
+              "expected_answer": "Worst-case describes the bound over all possible inputs, not a typical run - if the target is absent or happens to be last, linear search must check every element, so the bound that holds for every possible input is O(n); an occasional early find doesn't change what the worst case requires."
+            }
+          ]
         },
         {
           "id": "ch01-b02",

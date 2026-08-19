@@ -156,20 +156,44 @@ on PATH), so there's precedent, but each new language is a toolchain
 assumption the user might not have, discovered only when they hit a
 book that needs it.
 
-## Authored multi-question blobs
+## Authored multi-question blobs — done
 
-Each blob currently has exactly one authored exercise in `content.json`.
-Runtime-generated extras (spaced review, synthesis) are now surfaced
-inline between blobs (see CLAUDE.md's design-decisions section), but
-those are ephemeral and progress-dependent by design — they can't be
-authored at generation time. A different idea: let generation itself
-author 2-3 questions per blob (e.g. one implementation + one short
-conceptual check), stored in `content.json`. Would need: a schema change
-(`blob.exercise` → a list), a decision on what "passing" a blob means
-with multiple questions (current lean: only the primary one gates
-progression, extras are supplementary — matches invariant 6, "only the
-primary exercise gates"), and `SKILL.md` guidance for when a second
-authored question earns its place versus just adding busywork.
+`content.json` blobs can now carry 0-2 `extra_questions` alongside the
+one primary `exercise` — same object shape, authored the same way.
+Strictly non-gating: only `exercise` unlocks the next blob, exactly as
+before; `extra_questions` never do. Offered inline once the primary is
+passed, graded through new `/api/extra-submit`/`/api/extra-skip`
+endpoints (both server-side gated on the primary already being
+`"passed"`, per invariant 6). See `CLAUDE.md`'s design-decisions
+entries and "Extra (optional) questions" in
+`app-engine/content/SCHEMA.md` for the full mechanism.
+
+The consequence model landed as three rungs, not two: correct is a
+no-op; skipped is a *soft* nudge (pulls the blob's next review closer
+by half an interval - skipping carries no signal about what's weak,
+just that it wasn't engaged with); incorrect is a *hard* nudge (forces
+the review immediately due) **and** records what was missed into that
+blob's `extra_gaps`, which `build_variant_prompt`/`build_synthesis_prompt`
+now read so a later review variant or synthesis challenge involving
+that blob specifically re-probes the identified gap, not just
+generically retests the concept. Cleared on the next successful review
+pass. `nudge_review_date()` (generalized from what was
+`apply_synthesis_result()`) is the shared mechanism behind both the
+soft and hard severities, and now also behind synthesis-challenge
+misses, which previously only had the hard case.
+
+Verified end-to-end against a real content pack, not just written: the
+full gating chain (locked → primary-not-passed → correct → incorrect →
+skip → invalid index), the box-never-moves/last_reviewed-changes
+distinction, and - the actual point of the feature - a live `claude`
+call confirmed a recorded gap (conflating "worst-case complexity" with
+"how fast the computer is") produced a generated review variant that
+explicitly re-probed that exact misconception, not a generic variant.
+`test_engine.sh` covers the deterministic (implementation-type)
+gating/status/nudge paths (33 checks now); the claude-graded
+short-answer path and the gap-injection-into-generation path were
+verified manually against a live `claude` CLI call, same category as
+every other claude-dependent path in this engine.
 
 ## Knowledge graph depth — verified, not a gap
 

@@ -75,6 +75,9 @@
         </div>
 
         <div id="next-row" class="hidden">
+          <div id="extra-questions-nudge" class="hidden">
+            <div id="extra-questions-list"></div>
+          </div>
           <div id="checkpoint-nudge" class="hidden">
             <span id="checkpoint-nudge-text"></span>
             <button id="checkpoint-nudge-btn">Try it</button>
@@ -120,6 +123,21 @@
         <button id="synthesis-submit-btn">Submit</button>
       </div>
       <pre id="synthesis-output"></pre>
+    </div>
+  </div>
+
+  <div id="extra-modal" class="modal hidden">
+    <div class="modal-inner">
+      <button id="extra-close-btn" class="modal-close-btn">&times;</button>
+      <h3>Extra question</h3>
+      <p id="extra-modal-prompt"></p>
+      <textarea id="extra-code-input" class="hidden" spellcheck="false"></textarea>
+      <textarea id="extra-answer-input" class="hidden" spellcheck="false" placeholder="Type your answer..."></textarea>
+      <div class="btn-row">
+        <button id="extra-submit-btn">Submit</button>
+        <button id="extra-skip-btn">Skip this one</button>
+      </div>
+      <div id="extra-output"></div>
     </div>
   </div>
 

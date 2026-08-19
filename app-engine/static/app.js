@@ -161,6 +161,7 @@ function renderExercise(blob) {
   $("skip-btn").classList.toggle("hidden", state.status === "passed");
 
   renderCheckpointNudge(state.status === "passed");
+  renderExtraQuestionsNudge(state.status === "passed", blob);
 }
 
 // Optional, non-gating nudge shown alongside "Continue" once this blob is
@@ -179,6 +180,71 @@ function renderCheckpointNudge(blobPassed) {
     $("checkpoint-nudge-text").textContent = "Optional: try a synthesis challenge combining recent concepts";
     $("checkpoint-nudge-btn").onclick = openSynthesisChallenge;
   }
+}
+
+// Optional, non-gating extra (authored) questions for this blob, shown
+// the same way as the synthesis nudge above - never required, never
+// blocks Continue. Skipping or answering wrong still has an effect
+// server-side (see apply_extra_question_result in server.py): it pulls
+// this blob's next spaced review closer, and a wrong answer also
+// records what was missed so a later review variant/synthesis
+// challenge specifically re-probes it - none of that needs UI here,
+// just showing each question's resolved status once it has one.
+function renderExtraQuestionsNudge(blobPassed, blob) {
+  const extras = blob.extra_questions || [];
+  const container = $("extra-questions-list");
+  container.innerHTML = "";
+  const eligible = blobPassed && extras.length > 0;
+  $("extra-questions-nudge").classList.toggle("hidden", !eligible);
+  if (!eligible) return;
+
+  const state = PROGRESS.blobs[blob.id] || {};
+  const extraStatus = state.extra_status || {};
+  extras.forEach((eq, i) => {
+    const status = extraStatus[String(i)];
+    const row = document.createElement("div");
+    row.className = "extra-question-row";
+    const label = document.createElement("span");
+    label.textContent = status ? `Extra question ${i + 1}: ${status}` : `Extra question ${i + 1} (optional)`;
+    row.appendChild(label);
+    if (!status) {
+      const tryBtn = document.createElement("button");
+      tryBtn.textContent = "Try it";
+      tryBtn.onclick = () => openExtraModal(blob, i);
+      row.appendChild(tryBtn);
+      const skipBtn = document.createElement("button");
+      skipBtn.textContent = "Skip";
+      skipBtn.onclick = () => skipExtraQuestion(blob.id, i);
+      row.appendChild(skipBtn);
+    }
+    container.appendChild(row);
+  });
+}
+
+function openExtraModal(blob, index) {
+  const eq = blob.extra_questions[index];
+  const isImpl = eq.type === "implementation";
+  $("extra-modal-prompt").textContent = eq.prompt;
+  renderMath($("extra-modal-prompt"));
+  $("extra-code-input").classList.toggle("hidden", !isImpl);
+  $("extra-answer-input").classList.toggle("hidden", isImpl);
+  $("extra-code-input").value = isImpl ? eq.starter_code || "" : "";
+  $("extra-answer-input").value = "";
+  $("extra-output").innerHTML = "";
+  const modal = $("extra-modal");
+  modal.dataset.blobId = blob.id;
+  modal.dataset.index = String(index);
+  modal.dataset.isImpl = isImpl ? "1" : "";
+  modal.classList.remove("hidden");
+}
+
+async function skipExtraQuestion(blobId, index) {
+  await api("/api/extra-skip", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ blob_id: blobId, index }),
+  });
+  await refreshContent();
 }
 
 let draftSaveTimer = null;
@@ -553,9 +619,43 @@ $("synthesis-submit-btn").onclick = async () => {
   }
   renderGradedResult($("synthesis-output"), { answer, passed: result.passed, output: result.output, feedback: result.feedback });
   // A failed synthesis pulls its component blobs' next review forward
-  // (see apply_synthesis_result in server.py) - refresh so that shows up
+  // (see nudge_review_date in server.py) - refresh so that shows up
   // in the review banner right away instead of only after a page reload.
   await refreshContent();
+};
+
+$("extra-close-btn").onclick = () => $("extra-modal").classList.add("hidden");
+
+$("extra-submit-btn").onclick = async () => {
+  const modal = $("extra-modal");
+  const blobId = modal.dataset.blobId;
+  const index = parseInt(modal.dataset.index, 10);
+  const isImpl = modal.dataset.isImpl === "1";
+  const answer = isImpl ? null : $("extra-answer-input").value;
+  const body = isImpl
+    ? { blob_id: blobId, index, code: $("extra-code-input").value }
+    : { blob_id: blobId, index, answer };
+  $("extra-output").textContent = "Grading...";
+  const result = await api("/api/extra-submit", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  if (result.error) {
+    $("extra-output").textContent = result.error;
+    return;
+  }
+  renderGradedResult($("extra-output"), { answer, passed: result.passed, output: result.output, feedback: result.feedback });
+  // A wrong answer nudges this blob's next review forward and records
+  // what was missed (see apply_extra_question_result in server.py) -
+  // refresh so the sidebar/review banner/nudge list reflect it now.
+  await refreshContent();
+};
+
+$("extra-skip-btn").onclick = async () => {
+  const modal = $("extra-modal");
+  await skipExtraQuestion(modal.dataset.blobId, parseInt(modal.dataset.index, 10));
+  modal.classList.add("hidden");
 };
 
 function renderGraphNode(node, isRoot) {
@@ -582,5 +682,6 @@ function renderGraphNode(node, isRoot) {
 enableCodeEditing("code-input");
 enableCodeEditing("review-code-input");
 enableCodeEditing("synthesis-code-input");
+enableCodeEditing("extra-code-input");
 
 refreshContent();

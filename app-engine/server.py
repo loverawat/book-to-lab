@@ -194,26 +194,60 @@ def due_review_blob(content, progress):
     return candidates[0][1]
 
 
-def apply_synthesis_result(blob_ids, passed):
-    """Synthesis questions are optional and never gate progress or move a
-    blob's own Leitner box - failing to combine several concepts together
-    is weaker evidence against any single one of them than missing a
-    review question aimed directly at it. But it shouldn't be a no-op
-    either: on failure, pull each component blob's next review forward to
-    immediately due (last_reviewed reset, box left alone) so struggling to
-    synthesize still feeds back into what gets resurfaced, just more
-    gently than a direct miss (which resets the box too)."""
-    if passed or not blob_ids:
+def nudge_review_date(blob_ids, severity):
+    """Pulls one or more blobs' next spaced-review date closer, without
+    ever moving their Leitner box - shared by optional signals
+    (synthesis challenges, extra questions) that shouldn't be scored as
+    harshly as a direct miss on the blob's own primary exercise (which
+    does move the box, via leitner_advance), but also shouldn't be
+    no-ops. severity: "hard" (force immediately due - a real, specific
+    miss: synthesis failure, or an incorrect answer on an extra
+    question) or "soft" (pull the due date half an interval earlier - a
+    weaker signal, e.g. skipping an extra question, which tells us
+    nothing about WHAT is weak, just that it wasn't engaged with)."""
+    if severity is None or not blob_ids:
         return
     progress = load_progress()
     changed = False
     for blob_id in blob_ids:
         state = progress["blobs"].get(blob_id)
-        if state is not None:
+        if state is None:
+            continue
+        if severity == "hard":
             state["last_reviewed"] = 0
-            changed = True
+        elif severity == "soft":
+            box = state.get("box", 1)
+            interval_days = {1: 0.5, 2: 1, 3: 3, 4: 7, 5: 21}.get(box, 21)
+            state["last_reviewed"] = state.get("last_reviewed", 0) - (interval_days * 86400 / 2)
+        changed = True
     if changed:
         save_progress(progress)
+
+
+def apply_extra_question_result(blob_id, outcome, gap_note=None):
+    """Extra (authored, optional) questions never gate progression and
+    never move the blob's own Leitner box - same non-gating philosophy
+    as synthesis challenges (see nudge_review_date). outcome: "correct"
+    (no-op - not strong enough evidence to move anything), "skipped"
+    (soft nudge - tells us nothing about what's weak, just pulls the
+    review date up), or "incorrect" (hard nudge - a real, specific
+    signal: forces the review immediately due AND records gap_note, so
+    a later review variant or synthesis challenge for this blob can
+    specifically re-probe the identified gap instead of just generically
+    retesting it - see build_variant_prompt/build_synthesis_prompt).
+    Notes are capped at the 3 most recent so that prompt doesn't grow
+    unbounded over many attempts."""
+    if outcome == "correct":
+        return
+    nudge_review_date([blob_id], "hard" if outcome == "incorrect" else "soft")
+    if outcome == "incorrect" and gap_note:
+        progress = load_progress()
+        state = progress["blobs"].get(blob_id)
+        if state is not None:
+            gaps = state.setdefault("extra_gaps", [])
+            gaps.append(gap_note)
+            state["extra_gaps"] = gaps[-3:]
+            save_progress(progress)
 
 
 def recent_passed_blobs(content, progress, n=3):
@@ -377,13 +411,25 @@ def build_grading_prompt(book_title, excerpt, exercise_prompt, expected_answer, 
     return base
 
 
-def build_variant_prompt(book_title, blob, language):
+def build_variant_prompt(book_title, blob, language, gap_notes=None):
     exercise = blob["exercise"]
     shape = (
         '{"prompt": "...", "starter_code": "...", "test_code": "...", "reference_solution": "..."}'
         if exercise["type"] == "implementation"
         else '{"prompt": "...", "expected_answer": "..."}'
     )
+    gap_block = ""
+    if gap_notes:
+        joined_gaps = "\n".join(f"- {g}" for g in gap_notes)
+        gap_block = "\n\n" + textwrap.dedent(f"""
+            The learner has previously struggled with optional extra
+            questions on this exact concept, specifically:
+            {joined_gaps}
+            Where it fits naturally, make this variant specifically probe
+            that same gap again - not a generic variant, and not a repeat
+            of the extra question verbatim, but still following the
+            "different specifics" rule below.
+        """).strip()
     return textwrap.dedent(f"""
         You are writing a FRESH variant of an existing exercise, for spaced
         review, testing the same concept from the book "{book_title}" but
@@ -398,6 +444,7 @@ def build_variant_prompt(book_title, blob, language):
         --- ORIGINAL EXERCISE (format/style reference only - don't reuse its specifics) ---
         {json.dumps(exercise)}
         --- END ORIGINAL ---
+        {gap_block}
 
         Language for any code: {language}.
         If you use math notation in the prompt or answer, write it as LaTeX
@@ -408,8 +455,20 @@ def build_variant_prompt(book_title, blob, language):
     """).strip()
 
 
-def build_synthesis_prompt(book_title, blob_excerpts, language):
+def build_synthesis_prompt(book_title, blob_excerpts, language, gap_notes_by_concept=None):
     joined = "\n\n".join(f"[{concept}]\n{text}" for concept, text in blob_excerpts)
+    gap_block = ""
+    if gap_notes_by_concept:
+        lines = [f"- {concept}: " + "; ".join(notes) for concept, notes in gap_notes_by_concept.items() if notes]
+        if lines:
+            gap_block = "\n\n" + textwrap.dedent("""
+                The learner has previously struggled with optional extra
+                questions on some of these concepts:
+            """).strip() + "\n" + "\n".join(lines) + "\n" + textwrap.dedent("""
+                Where it fits naturally, make this synthesis exercise
+                specifically exercise those gaps too, not just combine the
+                concepts generically.
+            """).strip()
     return textwrap.dedent(f"""
         You are creating a synthesis exercise for the book "{book_title}"
         that requires combining ALL of the concepts below together in one
@@ -417,6 +476,7 @@ def build_synthesis_prompt(book_title, blob_excerpts, language):
         excerpts - no outside knowledge or conventions beyond what's here.
 
         {joined}
+        {gap_block}
 
         Language for any code: {language}.
         If you use math notation in the prompt or answer, write it as LaTeX
@@ -478,8 +538,9 @@ class Handler(BaseHTTPRequestHandler):
                 return
             _, blob = find_blob(content, blob_id)
 
+            gap_notes = progress["blobs"].get(blob_id, {}).get("extra_gaps", [])
             variant_prompt = build_variant_prompt(
-                content.get("title", "this book"), blob, content.get("language", "python")
+                content.get("title", "this book"), blob, content.get("language", "python"), gap_notes
             )
             variant, error = call_claude_json(variant_prompt)
             if variant is not None:
@@ -510,11 +571,15 @@ class Handler(BaseHTTPRequestHandler):
                 return
             excerpts = []
             concepts = []
+            gap_notes_by_concept = {}
             for bid in blob_ids:
                 _, b = find_blob(content, bid)
                 excerpts.append((b["concept"], b.get("reading", "")))
                 concepts.append(b["concept"])
-            prompt = build_synthesis_prompt(content.get("title", "this book"), excerpts, content.get("language", "python"))
+                gap_notes_by_concept[b["concept"]] = progress["blobs"].get(bid, {}).get("extra_gaps", [])
+            prompt = build_synthesis_prompt(
+                content.get("title", "this book"), excerpts, content.get("language", "python"), gap_notes_by_concept
+            )
             result, error = call_claude_json(prompt)
             if result is None:
                 self._json({"error": error or "Could not generate a synthesis challenge."}, 502)
@@ -745,6 +810,12 @@ class Handler(BaseHTTPRequestHandler):
             state["box"] = leitner_advance(state.get("box", 1), passed)
             state["last_reviewed"] = time.time()
             state["attempts"] = state.get("attempts", 0) + 1
+            if passed:
+                # a clean spaced-review pass is direct evidence the gap
+                # identified by an earlier struggled extra question may no
+                # longer exist - clear it rather than keep steering future
+                # variants/synthesis at something already resolved
+                state.pop("extra_gaps", None)
             save_progress(progress)
             REVIEW_VARIANTS.pop(blob_id, None)
             self._json({"passed": passed, "output": output, "feedback": feedback})
@@ -762,7 +833,7 @@ class Handler(BaseHTTPRequestHandler):
                 passed, output = run_code_test(
                     content.get("language", "python"), body.get("code", ""), challenge["test_code"]
                 )
-                apply_synthesis_result(challenge.get("_blob_ids", []), passed)
+                nudge_review_date(challenge.get("_blob_ids", []), None if passed else "hard")
                 self._json({"passed": passed, "output": output})
             else:
                 prompt = build_grading_prompt(
@@ -775,8 +846,78 @@ class Handler(BaseHTTPRequestHandler):
                     self._json({"error": error or "grading failed"}, 502)
                     return
                 passed = result.get("verdict") == "correct"
-                apply_synthesis_result(challenge.get("_blob_ids", []), passed)
+                nudge_review_date(challenge.get("_blob_ids", []), None if passed else "hard")
                 self._json({"passed": passed, "feedback": result.get("feedback", "")})
+            return
+
+        if parsed.path == "/api/extra-submit":
+            content = load_content()
+            progress = load_progress()
+            blob_id = body["blob_id"]
+            index = body.get("index")
+            if not is_unlocked(content, progress, blob_id):
+                self._json({"error": "blob is locked"}, 403)
+                return
+            if progress["blobs"].get(blob_id, {}).get("status") != "passed":
+                self._json({"error": "the primary exercise for this blob must be passed first"}, 403)
+                return
+            _, blob = find_blob(content, blob_id)
+            extra_questions = (blob or {}).get("extra_questions", [])
+            if blob is None or index is None or not (0 <= index < len(extra_questions)):
+                self._json({"error": "unknown blob_id or extra question index"}, 404)
+                return
+            eq = extra_questions[index]
+
+            if eq["type"] == "implementation":
+                passed, output = run_code_test(
+                    content.get("language", "python"), body.get("code", ""), eq["test_code"]
+                )
+                feedback = None
+                gap_note = None if passed else f"Struggled with an additional question: {eq.get('prompt', '')}"
+            else:
+                prompt = build_grading_prompt(
+                    content.get("title", "this book"), blob.get("reading", ""),
+                    eq.get("prompt", ""), eq.get("expected_answer", ""), body.get("answer", ""),
+                )
+                result, error = call_claude_json(prompt)
+                if result is None:
+                    self._json({"error": error or "grading failed"}, 502)
+                    return
+                passed = result.get("verdict") == "correct"
+                output = None
+                feedback = result.get("feedback")
+                gap_note = None if passed else feedback
+
+            state = progress["blobs"].setdefault(blob_id, {"status": "passed", "box": 1, "last_reviewed": 0})
+            extra_status = state.setdefault("extra_status", {})
+            extra_status[str(index)] = "passed" if passed else "incorrect"
+            save_progress(progress)
+            apply_extra_question_result(blob_id, "correct" if passed else "incorrect", gap_note)
+            self._json({"passed": passed, "output": output, "feedback": feedback})
+            return
+
+        if parsed.path == "/api/extra-skip":
+            content = load_content()
+            progress = load_progress()
+            blob_id = body["blob_id"]
+            index = body.get("index")
+            if not is_unlocked(content, progress, blob_id):
+                self._json({"error": "blob is locked"}, 403)
+                return
+            if progress["blobs"].get(blob_id, {}).get("status") != "passed":
+                self._json({"error": "the primary exercise for this blob must be passed first"}, 403)
+                return
+            _, blob = find_blob(content, blob_id)
+            extra_questions = (blob or {}).get("extra_questions", [])
+            if blob is None or index is None or not (0 <= index < len(extra_questions)):
+                self._json({"error": "unknown blob_id or extra question index"}, 404)
+                return
+            state = progress["blobs"].setdefault(blob_id, {"status": "passed", "box": 1, "last_reviewed": 0})
+            extra_status = state.setdefault("extra_status", {})
+            extra_status[str(index)] = "skipped"
+            save_progress(progress)
+            apply_extra_question_result(blob_id, "skipped")
+            self._json({"ok": True})
             return
 
         self._json({"error": "not found"}, 404)

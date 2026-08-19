@@ -84,6 +84,11 @@ symlinked into `~/.claude/skills/book-to-lab` for discovery. Remote:
    `/api/submit`, `/api/self-assess`, `/api/grade-answer`, and
    `/api/skip` all check `is_unlocked()` before grading — this was a gap
    caught during initial testing, don't reintroduce it for new endpoints.
+   `/api/extra-submit` and `/api/extra-skip` extend this a step further:
+   they check `is_unlocked()` *and* that the blob's primary `exercise`
+   is already `"passed"` — extra questions are offered in the UI only
+   once the primary is passed, and that precondition is enforced
+   server-side too, not just by hiding the button.
 7. **Runtime-generated content (review variants, synthesis challenges)
    is ephemeral, never written to `content.json`.** `REVIEW_VARIANTS`
    and `SYNTHESIS_CHALLENGES` are in-memory dicts, gone on restart -
@@ -417,6 +422,45 @@ symlinked into `~/.claude/skills/book-to-lab` for discovery. Remote:
   venv for that category beats one per tool. The output (a static PNG
   or GIF) is saved into `app/static/media/` and referenced exactly like
   a book image - no schema change, no engine change.
+- **`extra_questions` (0-2 per blob) are authored supplementary
+  questions that never gate progression, but aren't consequence-free
+  either** - only the blob's one `exercise` unlocks the next blob
+  (invariant 6); `extra_questions` never do, regardless of whether
+  they're answered, skipped, or ignored entirely. Graded through
+  `/api/extra-submit`/`/api/extra-skip` and `apply_extra_question_result()`,
+  which applies an intentionally asymmetric consequence, mirroring the
+  synthesis-challenge precedent (`nudge_review_date`) but with a third,
+  softer rung: correct is a no-op (not strong evidence of anything new),
+  skipped is a *soft* nudge (pulls the blob's next review closer by half
+  an interval - skipping carries no information about *what* is weak,
+  just that it wasn't engaged with), incorrect is a *hard* nudge (forces
+  the review immediately due, same as a synthesis miss) **and** records
+  what was missed into that blob's `extra_gaps`.
+- **`extra_gaps` feeds forward into later spaced-review variants and
+  synthesis challenges, not just into timing.** `build_variant_prompt`/
+  `build_synthesis_prompt` now accept the relevant blob(s)' `extra_gaps`
+  and explicitly ask the generated exercise to re-probe that specific
+  gap - this was the actual point of the feature, not a byproduct: an
+  optional extra question isn't just "more practice," a wrong answer on
+  one should shape what gets asked later, not just when. Verified live
+  against a real `claude` call: a wrong answer conflating "worst-case
+  complexity" with "how fast the computer is" produced a recorded gap,
+  and the next generated review variant explicitly required identifying
+  the worst case "in terms of how many elements must be checked, not
+  how fast any computer runs" - the model actually used the gap, not
+  just accepted the parameter. `extra_gaps` is cleared on the next
+  *successful* review pass for that blob (`/api/review-submit`) - a
+  clean pass is direct evidence the gap may no longer exist, so it
+  shouldn't keep steering future generation at something resolved.
+  Capped at the 3 most recent notes per blob so the prompt this feeds
+  into doesn't grow unbounded over repeated attempts.
+- **`nudge_review_date()` generalizes what was `apply_synthesis_result()`**
+  - same "hard" (immediately due) behavior for a synthesis miss as
+  before, plus the new "soft" (half-interval) severity for an extra
+  question skip. One shared function rather than two similar ones,
+  since both are instances of the same idea: an optional, non-gating
+  signal that should influence spaced review without moving the
+  Leitner box the way a direct primary-exercise miss does.
 
 ## Dev workflow
 

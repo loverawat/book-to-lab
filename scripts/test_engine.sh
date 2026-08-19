@@ -72,6 +72,42 @@ check "explicit draft save persists" '"draft": "# work in progress"' "$resp"
 resp=$(curl -s "$BASE/api/content")
 check "next blob unlocked after passing" '"ch01-b02": {"status": "available"' "$resp"
 
+# 4d. extra (optional, authored) questions require the primary exercise
+# to be passed first - server-side, not just hidden in the UI
+code=$(curl -s -o /dev/null -w "%{http_code}" -X POST "$BASE/api/extra-submit" \
+  -H 'Content-Type: application/json' -d '{"blob_id":"ch01-b02","index":0,"code":"x"}')
+check "extra question rejected before primary passed" "403" "$code"
+
+# 4e. a wrong extra-question answer never gates progress or moves the
+# blob's own Leitner box, but does force its next review immediately due
+resp=$(curl -s -X POST "$BASE/api/extra-submit" -H 'Content-Type: application/json' \
+  -d '{"blob_id":"ch01-b01","index":0,"code":"def count_occurrences(items, target):\n    return -1\n"}')
+check "wrong extra question reports failure" '"passed": false' "$resp"
+resp=$(curl -s "$BASE/api/content")
+check "wrong extra question forces review immediately due" '"ch01-b01": {"status": "passed", "box": 1, "last_reviewed": 0' "$resp"
+check "wrong extra question status recorded" '"extra_status": {"0": "incorrect"}' "$resp"
+
+# 4f. a correct extra-question answer passes and updates its status
+resp=$(curl -s -X POST "$BASE/api/extra-submit" -H 'Content-Type: application/json' \
+  -d '{"blob_id":"ch01-b01","index":0,"code":"def count_occurrences(items, target):\n    return sum(1 for v in items if v == target)\n"}')
+check "correct extra question passes" '"passed": true' "$resp"
+resp=$(curl -s "$BASE/api/content")
+check "correct extra question status recorded" '"extra_status": {"0": "passed"}' "$resp"
+
+# 4g. skipping an extra question records status too - lesser impact than
+# a wrong answer (soft nudge vs. forced-immediately-due), verified
+# separately at the unit level; here just confirm it's tracked
+resp=$(curl -s -X POST "$BASE/api/extra-skip" -H 'Content-Type: application/json' \
+  -d '{"blob_id":"ch01-b01","index":0}')
+check "extra question skip accepted" '"ok": true' "$resp"
+resp=$(curl -s "$BASE/api/content")
+check "skip records status" '"extra_status": {"0": "skipped"}' "$resp"
+
+# 4h. unknown extra-question index is rejected
+code=$(curl -s -o /dev/null -w "%{http_code}" -X POST "$BASE/api/extra-submit" \
+  -H 'Content-Type: application/json' -d '{"blob_id":"ch01-b01","index":5,"code":"x"}')
+check "unknown extra question index rejected" "404" "$code"
+
 # 5. hints return in order
 resp=$(curl -s -X POST "$BASE/api/hint" -H 'Content-Type: application/json' \
   -d '{"blob_id":"ch01-b02","level":0}')

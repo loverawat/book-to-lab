@@ -44,7 +44,15 @@ The skill generates this file from the converted markdown; the engine
             // --- short_answer exercises (used only when a concept has no
             // natural implementation - e.g. a design tradeoff) ---
             "expected_answer": "The reference answer, shown after you self-assess."
-          }
+          },
+
+          // Optional, 0-2 entries. Same shape as `exercise` (each is its
+          // own {type, prompt, ...} object), but these never gate
+          // progression - only `exercise` does. Offered inline once
+          // `exercise` is passed. See "Extra (optional) questions" below.
+          "extra_questions": [
+            { "type": "implementation", "prompt": "...", "starter_code": "...", "test_code": "...", "hints": [], "reference_solution": "..." }
+          ]
         }
       ]
     }
@@ -93,6 +101,40 @@ alt="...">`. `server.py`'s static handler already serves anything under
 where it's reachable. Only copy images actually relevant to that blob's
 concept, not every image that happened to be nearby in the source; see
 `SKILL.md`'s Phase 2 for the full guidance.
+
+## Extra (optional) questions
+
+`extra_questions` (0-2 per blob) let a blob carry supplementary
+authored questions beyond its one primary `exercise` - same object
+shape, graded through the same paths (`/api/extra-submit`,
+`/api/extra-skip`). They are strictly non-gating: only `exercise`
+determines whether the next blob unlocks, and this stays true
+regardless of whether any `extra_questions` exist, get answered, or get
+skipped. The frontend only offers them once `exercise` is already
+passed.
+
+They're not consequence-free, though - correctness has an asymmetric
+effect on this blob's own spaced review (`apply_extra_question_result`
+in `server.py`), never on its Leitner box (only a miss on the *primary*
+exercise moves that):
+- **Correct** - no effect. Not strong enough evidence to change
+  anything already established by passing the primary.
+- **Skipped** - a soft nudge: pulls the blob's next review date closer
+  by half an interval. Skipping says nothing about *what* is weak, just
+  that it wasn't engaged with.
+- **Incorrect** - a hard nudge: forces the blob's next review
+  immediately due, *and* records what was missed (the grading
+  feedback, for `short_answer`; a short descriptor for
+  `implementation`) into that blob's `extra_gaps`. The next spaced-
+  review variant or synthesis challenge involving this blob reads
+  `extra_gaps` and is specifically asked to re-probe that gap, not just
+  generically retest the concept (see `build_variant_prompt`/
+  `build_synthesis_prompt`). A later successful review pass clears
+  `extra_gaps` - direct evidence the gap may be resolved.
+
+Not every blob needs `extra_questions`; most shouldn't have any. See
+`SKILL.md`'s Phase 2 for when a second authored question earns its
+place versus just adding busywork.
 
 ## Per-book dependency isolation
 

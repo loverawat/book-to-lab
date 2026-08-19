@@ -327,6 +327,29 @@ prompts are graded the same way as any other `short_answer` exercise;
 this is a matter of how you phrase `prompt`, not a different schema
 field.
 
+**Optionally, add `extra_questions`** (0-2, same object shape as
+`exercise` above, authored the same way per its own `type`) - but only
+where a second question genuinely earns its place, not as a default.
+It earns its place when the primary exercise necessarily leaves
+something real on the table: the primary is `implementation` but the
+concept also has a real interpretive angle worth checking (what does
+the result *mean*, not just whether it computes correctly - the same
+distinction that drives the `short_answer`-vs-`implementation` choice
+above, now applied as a supplement rather than a replacement); or the
+concept has a natural related-but-distinct variation worth testing
+separately (a different edge case, a related operation) that would be
+artificial to cram into the one primary exercise. It does *not* earn
+its place just to pad out a blob, or to test the same thing the primary
+already tests with different numbers - that's busywork, not a second
+question. Most blobs shouldn't have any. These are strictly optional
+for the learner too - the frontend offers them once the primary is
+passed, never blocks on them, and correctness has no bearing on
+progression - only a bearing on this blob's own spaced-review timing
+and, when a question is answered incorrectly, on what a later review
+variant specifically re-probes (see "Extra (optional) questions" in
+`app-engine/content/SCHEMA.md` for the mechanism - nothing further to
+do here beyond authoring good questions when they're warranted).
+
 ### 4. Set prerequisites for the knowledge graph
 
 For each blob, list the `prerequisites` (blob ids) a learner should
