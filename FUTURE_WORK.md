@@ -191,10 +191,18 @@ and `server.py`'s static handler only serves files under `app/static/`
 (`STATIC_DIR not in file_path.parents` rejects anything else) - `media/`
 sits next to `app/`, not inside it, so it isn't reachable by the running
 app at all. Net effect: every image the source book actually shipped is
-extracted and then silently unused. This is a small, concrete fix
-(unlike the diagram-generation idea below) and arguably worth doing
-before that idea, since a generated diagram should be a fallback for
-when the book has no useful image of its own, not the only path:
+extracted and then silently unused. `convert_pdf.py` now does the exact
+same thing for PDF-sourced images (its own images extract into `media/`
+the same way, same dead end) - this gap wasn't PDF-specific to begin
+with, but PDF support landing means it now definitely applies to both
+input formats, not just epub. (PDF's *rasterized math* images are a
+different story - those are consumed transiently by the Phase 2
+generation session, which reads and transcribes them into LaTeX text,
+not meant to be displayed as images at all - this item is only about
+regular content images.) This is a small, concrete fix (unlike the
+diagram-generation idea below) and arguably worth doing before that
+idea, since a generated diagram should be a fallback for when the book
+has no useful image of its own, not the only path:
 
 - Decide how `media/` gets served - either copy referenced images into
   `app/static/media/` during Phase 2 (keeps the "static dir is the only
@@ -258,16 +266,22 @@ checker's scope in `CLAUDE.md`, and the `venv_python()` fix in
 `server.py`. What's genuinely still open is only the bigger question
 below.
 
-**Still open: what relaxing invariant 4 itself would unlock** — several
-ideas elsewhere in this file are explicitly gated on this, and none of
-them are decided:
+**Still open: what relaxing invariant 4 itself would unlock** — a couple
+of ideas elsewhere in this file are still genuinely gated on this, and
+neither is decided:
 - Manim instead of matplotlib-only for the diagram/animation idea above
   — real math-animation quality, but needs ffmpeg + cairo + (optionally)
   a LaTeX distribution, none of which `pip`/`venv` alone can install.
 - Real first-class multi-language exercise runners (Rust, Go, actual
   Postgres-flavor SQL, shell) — see the tradeoff note in "Implementation
   exercises are narrower than they need to be" above.
-- PDF support's conversion tooling and OCR — see that section below.
+
+(PDF support's own conversion tooling turned out *not* to need this
+after all — `pymupdf` is pure `pip`, so it got its own isolated
+skill-tooling venv instead of requiring any invariant-4 relaxation; see
+"PDF input support" below. OCR for scanned PDFs would likely follow the
+same pattern if it's ever built, not a reason to relax invariant 4
+either - it's simply not built, see that section's still-open list.)
 - Always-available scientific stack (numpy/scipy/pandas/networkx)
   instead of per-book opt-in `dependencies`.
 
