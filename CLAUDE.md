@@ -475,6 +475,49 @@ symlinked into `~/.claude/skills/book-to-lab` for discovery. Remote:
   since both are instances of the same idea: an optional, non-gating
   signal that should influence spaced review without moving the
   Leitner box the way a direct primary-exercise miss does.
+- **Synthesis challenges brought up to parity with the primary
+  exercise: hints, an "ask claude to review" pre-submit check, a
+  reveal-reference fallback, and - the one that was a real bug, not a
+  missing feature - `test_code` that actually has to exercise every
+  combined piece.** Found via a concrete user report: completing only
+  one of a synthesis challenge's several required functions (the others
+  left as `raise NotImplementedError`) still reported "passed," because
+  `build_synthesis_prompt` never told claude its own generated
+  `test_code` had to cover every piece the challenge asked for - it only
+  said "combine the concepts," not "make sure the tests can't pass
+  without every required piece actually working." Fixed by adding that
+  requirement explicitly to the prompt. Verified against the exact
+  bug shape, twice independently (different generated challenges, both
+  multi-function): an all-`NotImplementedError` submission now correctly
+  fails, with the traceback naming the exact unimplemented function -
+  not hypothetical, this was reproduced and confirmed fixed against real
+  `claude` calls, not just reasoned about.
+  Hints reuse the same JSON-shape trick as `reference_solution`/
+  `expected_answer`/`reference_artifact` already did - `build_synthesis_prompt`
+  now also asks for a `hints` array in the one generation call, so
+  there's no second endpoint needed the way the primary exercise's
+  `/api/hint` is: the frontend just reveals `challenge.hints[level]`
+  progressively from the array it already has client-side.
+  "Ask claude to review" is a new `/api/synthesis-review` endpoint that
+  reuses `claude_review()` completely unchanged (book title, the
+  challenge's combined excerpt, its prompt, the in-progress submission)
+  - advisory feedback only, no grading, no state change, same contract
+  the primary exercise's review button already has.
+  Reveal-reference needed no backend change at all -
+  `reference_solution`/`expected_answer`/`reference_artifact` were
+  already present in `/api/synthesis-challenge`'s response, just never
+  displayed; `challengeReferenceText()` in `app.js` picks the right one
+  by `challenge.type`.
+- **A loading spinner (`loadingHTML()`/`.spinner` in `app.js`/`style.css`)
+  replaces plain "Grading..."/"Asking claude..." text at every call site
+  that hits `claude`, and the triggering button is disabled for the
+  duration** - prevents a double-click from firing two concurrent
+  `claude` calls against the same submission. The one that actually
+  mattered: opening the synthesis-challenge modal previously waited for
+  the full generation call before showing anything at all, so the
+  button looked unresponsive for however long generation took. Now the
+  modal opens immediately with a loading placeholder and populates once
+  the response lands.
 
 ## Dev workflow
 

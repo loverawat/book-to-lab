@@ -500,6 +500,15 @@ def build_synthesis_prompt(book_title, blob_excerpts, language, gap_notes_by_con
         {gap_block}
 
         Language for any code: {language}.
+        If the type is "implementation", the exercise necessarily combines
+        multiple concepts, which usually means multiple functions/pieces
+        working together - test_code MUST include test cases that actually
+        exercise every one of those pieces, not just whichever one is
+        easiest to satisfy. A learner who only implements one of the
+        required pieces (leaving another as a stub, a NotImplementedError,
+        or an unfinished branch) must see a test fail - don't write test
+        cases that could all pass while a required piece is still
+        unimplemented.
         If you use math notation in the prompt or answer, write it as LaTeX
         with $...$ inline or $$...$$ for display equations - it will be
         rendered, not other notation.
@@ -510,7 +519,8 @@ def build_synthesis_prompt(book_title, blob_excerpts, language, gap_notes_by_con
           "test_code": "self-contained test importing from solution.<ext> - only if type is implementation",
           "reference_solution": "only if type is implementation",
           "expected_answer": "only if type is short_answer",
-          "reference_artifact": "only if type is artifact"}}
+          "reference_artifact": "only if type is artifact",
+          "hints": ["2-4 progressive hints, gentle to near-solution"]}}
     """).strip()
 
 
@@ -870,6 +880,22 @@ class Handler(BaseHTTPRequestHandler):
                 passed = result.get("verdict") == "correct"
                 nudge_review_date(challenge.get("_blob_ids", []), None if passed else "hard")
                 self._json({"passed": passed, "feedback": result.get("feedback", "")})
+            return
+
+        if parsed.path == "/api/synthesis-review":
+            challenge_id = body.get("challenge_id")
+            challenge = SYNTHESIS_CHALLENGES.get(challenge_id)
+            if challenge is None:
+                self._json({"error": "unknown or expired challenge_id - request a new synthesis challenge"}, 404)
+                return
+            content = load_content()
+            feedback = claude_review(
+                content.get("title", "this book"),
+                challenge.get("_excerpt", ""),
+                challenge.get("prompt", ""),
+                body.get("submission", ""),
+            )
+            self._json({"feedback": feedback})
             return
 
         if parsed.path == "/api/extra-submit":

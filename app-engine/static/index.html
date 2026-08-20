@@ -121,8 +121,14 @@
       <textarea id="synthesis-answer-input" class="hidden" spellcheck="false" placeholder="Type your answer..."></textarea>
       <div class="btn-row">
         <button id="synthesis-submit-btn">Submit</button>
+        <button id="synthesis-hint-btn" disabled>Show hint</button>
+        <button id="synthesis-review-btn">Ask claude to review</button>
+        <button id="synthesis-reveal-btn">Reveal reference solution</button>
       </div>
-      <pre id="synthesis-output"></pre>
+      <div id="synthesis-hint-output"></div>
+      <div id="synthesis-review-output"></div>
+      <pre id="synthesis-reveal-output" class="hidden"></pre>
+      <div id="synthesis-output"></div>
     </div>
   </div>
 

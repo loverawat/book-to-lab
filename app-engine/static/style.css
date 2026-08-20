@@ -150,6 +150,7 @@ body {
 #review-banner-go, #skip-btn, #grade-answer-btn, #submit-follow-up-btn,
 #review-submit-btn, #synthesis-submit-btn, #review-close-btn, #synthesis-close-btn,
 #checkpoint-nudge-btn, #extra-submit-btn, #extra-skip-btn, #extra-close-btn,
+#synthesis-hint-btn, #synthesis-review-btn, #synthesis-reveal-btn,
 .extra-question-row button {
   font: inherit;
   border: 1px solid var(--border);
@@ -159,6 +160,19 @@ body {
   border-radius: 6px;
   cursor: pointer;
 }
+button:disabled { opacity: 0.55; cursor: default; }
+.spinner {
+  display: inline-block;
+  width: 13px;
+  height: 13px;
+  border: 2px solid var(--border);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: spin 0.7s linear infinite;
+  vertical-align: middle;
+  margin-right: 7px;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
 #run-btn, #next-btn, #got-it-btn, #grade-answer-btn, #submit-follow-up-btn,
 #review-submit-btn, #synthesis-submit-btn {
   background: var(--accent); color: var(--accent-text); border-color: var(--accent);

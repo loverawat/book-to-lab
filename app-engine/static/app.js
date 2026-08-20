@@ -75,6 +75,24 @@ function referenceText(ex) {
   return ex.type === "artifact" ? ex.reference_artifact || "" : ex.expected_answer || "";
 }
 
+// A synthesis challenge's reference is one of three fields depending on
+// its type (implementation/short_answer/artifact) - same idea as
+// referenceText() above, plus the implementation case, which
+// referenceText() doesn't cover since it's only ever used for the
+// primary blob's non-implementation exercise.
+function challengeReferenceText(ch) {
+  return ch.type === "implementation" ? ch.reference_solution || "" : referenceText(ch);
+}
+
+// Small inline spinner + label, used at every call site that kicks off a
+// live `claude` call - these can take real seconds, and previously gave
+// no visible feedback beyond a plain text swap (or, for the synthesis
+// challenge button specifically, nothing at all until the modal
+// suddenly appeared).
+function loadingHTML(text) {
+  return `<span class="spinner"></span>${text}`;
+}
+
 function renderSidebar() {
   $("book-title").textContent = CONTENT.title;
   const list = $("chapter-list");
@@ -391,12 +409,14 @@ $("hint-btn").onclick = async () => {
 
 $("claude-review-btn").onclick = async () => {
   const code = $("code-input").value;
-  $("claude-review-output").textContent = "Asking claude (grounded in this chapter only)...";
+  $("claude-review-output").innerHTML = loadingHTML("Asking claude (grounded in this chapter only)...");
+  $("claude-review-btn").disabled = true;
   const result = await api("/api/review", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ blob_id: CURRENT_BLOB_ID, code }),
   });
+  $("claude-review-btn").disabled = false;
   $("claude-review-output").textContent = result.feedback;
   renderMath($("claude-review-output"));
 };
@@ -471,12 +491,14 @@ function renderGradedResult(container, { answer, verdict, passed, output, feedba
 
 $("grade-answer-btn").onclick = async () => {
   const answer = $("answer-input").value;
-  $("grade-answer-output").textContent = "Grading (grounded in this chapter only)...";
+  $("grade-answer-output").innerHTML = loadingHTML("Grading (grounded in this chapter only)...");
+  $("grade-answer-btn").disabled = true;
   const result = await api("/api/grade-answer", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ blob_id: CURRENT_BLOB_ID, answer }),
   });
+  $("grade-answer-btn").disabled = false;
   if (result.error) {
     $("grade-answer-output").textContent = result.error;
     return;
@@ -502,7 +524,8 @@ $("grade-answer-btn").onclick = async () => {
 $("submit-follow-up-btn").onclick = async () => {
   if (!PENDING_FOLLOW_UP) return;
   const followUpAnswer = $("follow-up-input").value;
-  $("grade-answer-output").textContent = "Grading...";
+  $("grade-answer-output").innerHTML = loadingHTML("Grading...");
+  $("submit-follow-up-btn").disabled = true;
   const result = await api("/api/grade-answer", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -513,6 +536,7 @@ $("submit-follow-up-btn").onclick = async () => {
       follow_up_answer: followUpAnswer,
     }),
   });
+  $("submit-follow-up-btn").disabled = false;
   if (result.error) {
     $("grade-answer-output").textContent = result.error;
     return;
@@ -574,12 +598,14 @@ $("review-submit-btn").onclick = async () => {
   const isImpl = modal.dataset.isImpl === "1";
   const answer = isImpl ? null : $("review-answer-input").value;
   const body = isImpl ? { blob_id: blobId, code: $("review-code-input").value } : { blob_id: blobId, answer };
-  $("review-output").textContent = "Grading...";
+  $("review-output").innerHTML = loadingHTML("Grading...");
+  $("review-submit-btn").disabled = true;
   const result = await api("/api/review-submit", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
   });
+  $("review-submit-btn").disabled = false;
   if (result.error) {
     $("review-output").textContent = result.error;
     return;
@@ -588,13 +614,34 @@ $("review-submit-btn").onclick = async () => {
   await refreshContent();
 };
 
+let CURRENT_SYNTHESIS_CHALLENGE = null; // full generated challenge object, for hints/reveal after generation completes
+
 async function openSynthesisChallenge() {
+  const modal = $("synthesis-modal");
+  CURRENT_SYNTHESIS_CHALLENGE = null;
+  // Show the modal immediately with a loading state, rather than waiting
+  // for the whole generation call to finish before showing anything -
+  // this can take real seconds, and previously just looked unresponsive.
+  $("synthesis-modal-concepts").textContent = "";
+  $("synthesis-modal-prompt").innerHTML = loadingHTML("Generating a synthesis challenge (grounded in your recently passed concepts)...");
+  $("synthesis-code-input").classList.add("hidden");
+  $("synthesis-answer-input").classList.add("hidden");
+  $("synthesis-output").innerHTML = "";
+  $("synthesis-hint-output").innerHTML = "";
+  $("synthesis-review-output").innerHTML = "";
+  $("synthesis-reveal-output").classList.add("hidden");
+  $("synthesis-hint-btn").disabled = true;
+  $("synthesis-hint-btn").dataset.level = "0";
+  $("synthesis-submit-btn").disabled = true;
+  modal.classList.remove("hidden");
+
   const data = await api("/api/synthesis-challenge");
+  $("synthesis-submit-btn").disabled = false;
   if (data.error) {
-    alert(data.error);
+    $("synthesis-modal-prompt").textContent = data.error;
     return;
   }
-  const modal = $("synthesis-modal");
+  CURRENT_SYNTHESIS_CHALLENGE = data.challenge;
   const isImpl = data.challenge.type === "implementation";
   $("synthesis-modal-concepts").textContent = `Combining: ${data.concepts.join(", ")}`;
   $("synthesis-modal-prompt").textContent = data.challenge.prompt;
@@ -603,15 +650,54 @@ async function openSynthesisChallenge() {
   $("synthesis-answer-input").classList.toggle("hidden", isImpl);
   $("synthesis-code-input").value = isImpl ? data.challenge.starter_code || "" : "";
   $("synthesis-answer-input").value = "";
-  $("synthesis-output").textContent = "";
   modal.dataset.challengeId = data.challenge_id;
   modal.dataset.isImpl = isImpl ? "1" : "";
-  modal.classList.remove("hidden");
+  $("synthesis-hint-btn").disabled = !(data.challenge.hints && data.challenge.hints.length);
+  $("synthesis-reveal-btn").textContent =
+    data.challenge.type === "implementation" ? "Reveal reference solution"
+    : data.challenge.type === "artifact" ? "Reveal reference artifact"
+    : "Reveal reference answer";
 }
 
 $("synthesis-btn").onclick = openSynthesisChallenge;
 
 $("synthesis-close-btn").onclick = () => $("synthesis-modal").classList.add("hidden");
+
+$("synthesis-hint-btn").onclick = () => {
+  if (!CURRENT_SYNTHESIS_CHALLENGE) return;
+  const hints = CURRENT_SYNTHESIS_CHALLENGE.hints || [];
+  const btn = $("synthesis-hint-btn");
+  const level = btn.dataset.level ? parseInt(btn.dataset.level, 10) : 0;
+  if (level >= hints.length) return;
+  const p = document.createElement("p");
+  p.textContent = `Hint ${level + 1}: ${hints[level]}`;
+  $("synthesis-hint-output").appendChild(p);
+  renderMath(p);
+  btn.dataset.level = String(level + 1);
+  if (level + 1 >= hints.length) btn.disabled = true;
+};
+
+$("synthesis-reveal-btn").onclick = () => {
+  if (!CURRENT_SYNTHESIS_CHALLENGE) return;
+  const out = $("synthesis-reveal-output");
+  out.textContent = challengeReferenceText(CURRENT_SYNTHESIS_CHALLENGE);
+  out.classList.remove("hidden");
+  renderMath(out);
+};
+
+$("synthesis-review-btn").onclick = async () => {
+  const modal = $("synthesis-modal");
+  const isImpl = modal.dataset.isImpl === "1";
+  const submission = isImpl ? $("synthesis-code-input").value : $("synthesis-answer-input").value;
+  $("synthesis-review-output").innerHTML = loadingHTML("Asking claude (grounded in these concepts only)...");
+  const result = await api("/api/synthesis-review", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ challenge_id: modal.dataset.challengeId, submission }),
+  });
+  $("synthesis-review-output").textContent = result.feedback || result.error || "";
+  renderMath($("synthesis-review-output"));
+};
 
 $("synthesis-submit-btn").onclick = async () => {
   const modal = $("synthesis-modal");
@@ -620,12 +706,14 @@ $("synthesis-submit-btn").onclick = async () => {
   const body = isImpl
     ? { challenge_id: modal.dataset.challengeId, code: $("synthesis-code-input").value }
     : { challenge_id: modal.dataset.challengeId, answer };
-  $("synthesis-output").textContent = "Grading...";
+  $("synthesis-output").innerHTML = loadingHTML("Grading...");
+  $("synthesis-submit-btn").disabled = true;
   const result = await api("/api/synthesis-submit", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
   });
+  $("synthesis-submit-btn").disabled = false;
   if (result.error) {
     $("synthesis-output").textContent = result.error;
     return;
@@ -648,12 +736,14 @@ $("extra-submit-btn").onclick = async () => {
   const body = isImpl
     ? { blob_id: blobId, index, code: $("extra-code-input").value }
     : { blob_id: blobId, index, answer };
-  $("extra-output").textContent = "Grading...";
+  $("extra-output").innerHTML = loadingHTML("Grading...");
+  $("extra-submit-btn").disabled = true;
   const result = await api("/api/extra-submit", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
   });
+  $("extra-submit-btn").disabled = false;
   if (result.error) {
     $("extra-output").textContent = result.error;
     return;
