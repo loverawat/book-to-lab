@@ -67,6 +67,14 @@ function findBlob(id) {
   return {};
 }
 
+// Mirrors exercise_reference_text() in server.py - short_answer and
+// artifact exercises use different reference-field names for the same
+// role (the self-assess reveal text), see SKILL.md's "Decide exercise
+// type per blob".
+function referenceText(ex) {
+  return ex.type === "artifact" ? ex.reference_artifact || "" : ex.expected_answer || "";
+}
+
 function renderSidebar() {
   $("book-title").textContent = CONTENT.title;
   const list = $("chapter-list");
@@ -152,8 +160,13 @@ function renderExercise(blob) {
   if (isImpl) {
     $("code-input").value = state.draft || ex.starter_code || "";
   } else {
+    const isArtifact = ex.type === "artifact";
+    $("answer-input").placeholder = isArtifact ? "Type your response..." : "Type your answer...";
+    $("reveal-answer-btn").textContent = isArtifact
+      ? "Reveal reference artifact & self-assess instead"
+      : "Reveal answer & self-assess instead";
     $("answer-reveal").classList.add("hidden");
-    $("expected-answer").textContent = ex.expected_answer || "";
+    $("expected-answer").textContent = referenceText(ex);
     renderMath($("expected-answer"));
   }
 

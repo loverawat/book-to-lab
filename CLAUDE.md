@@ -116,19 +116,33 @@ symlinked into `~/.claude/skills/book-to-lab` for discovery. Remote:
 
 ## Design decisions and why (so they don't get re-litigated)
 
-- **Implementation exercises by default; `short_answer` when code would
-  be artificial busywork, or when the concept is fundamentally about
-  interpretation rather than computation** (what a result means, why
-  it's true, what it looks like geometrically — not just the formula
-  that produces it) — and even then, prefer an applied/scenario question
-  over pure recall. This came directly from the user wanting "learn by
-  doing," not a quiz app; the interpretation clause was added after a
+- **Three exercise types now, not two: `implementation` by default,
+  `short_answer` for a discrete question, `artifact` for producing/
+  repairing/translating/judging a concrete but non-executable thing.**
+  This came directly from the user wanting "learn by doing," not a quiz
+  app - the `short_answer` interpretation clause was added after a
   math-heavy book (linear algebra demo) generated as 8/8 implementation,
   every blob framed as "implement a function" even for concepts whose
   point was geometric meaning (a zero dot product means orthogonal, a
   zero determinant means no unique solution) — implementable, but not
-  actually testing whether that meaning was understood. See
-  `SKILL.md`'s "Decide exercise type per blob."
+  actually testing whether that meaning was understood. `artifact`
+  closes a further gap the same conversation surfaced: exercises whose
+  correct answer is a real design, proof, piece of applied writing, or
+  repair/translation/judgment task, which previously had no home except
+  `short_answer`-as-prose, forcing "produce this thing" into "explain
+  this thing." `artifact` reuses `short_answer`'s exact grading
+  mechanism (`build_grading_prompt`, self-assess fallback,
+  `exercise_reference_text()` picking `reference_artifact` vs.
+  `expected_answer`) - the only difference is prompt framing, not a new
+  grading path. See `SKILL.md`'s "Decide exercise type per blob" for
+  the full three-way decision and the taxonomy of `artifact` categories.
+  Also folded in: `implementation` itself was already narrower than
+  necessary - `test_code`/`starter_code`/`reference_solution` being
+  written "in Python" doesn't require the *taught skill* to be Python,
+  since `test_code` is just a harness (can shell out, use `sqlite3` to
+  check a SQL query, use `re` to validate a regex) - `SKILL.md` now says
+  so explicitly instead of defaulting every book to literal Python
+  regardless of what it actually teaches.
 - **Short-answer grading is claude-graded by default** (`/api/grade-answer`
   → `build_grading_prompt()`), with self-assessment (reveal + "I got it
   right"/"I missed it") kept as a manual fallback in the UI for when the

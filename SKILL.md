@@ -176,27 +176,142 @@ unique `id` (e.g. `ch03-b02`).
 
 ### 2. Decide exercise type per blob
 
-Default to **implementation**. A blob's exercise is `short_answer` when
-forcing code would be artificial busywork - e.g. a pure design tradeoff,
-a historical/motivational aside, a comparison of approaches with no
-natural artifact to build - **or** when the concept is fundamentally
-about interpretation rather than computation: what a result *means*, why
-it's true, what it looks like geometrically, what breaks if a condition
-fails. A blob can usually be *implemented* (compute the dot product,
-multiply the matrices) without that exercise ever testing whether the
-learner understands what the computed thing represents - e.g. "implement
-the dot product" tells you nothing about whether the learner knows a
-zero result means orthogonality, or why a zero determinant means no
-unique solution. Don't force those into code just because a plausible
-function signature exists; use `short_answer` (teach-back framing, see
-below) instead. When in doubt between the two, ask: does passing this
-exercise actually require understanding the interpretation, or just
+Three types: `implementation`, `short_answer`, `artifact`. Default to
+**implementation** - but read what that actually means below before
+reaching for `short_answer`/`artifact` as an escape hatch; a lot of
+concepts that don't look like "code" still belong in `implementation`.
+
+**`implementation`** means "correctness is checkable by actually
+running something" - and that's broader than it sounds, because the
+book's detected language (`content.json`'s `"language"` field) only
+needs to be the *harness*, not the skill being tested. If the book is
+teaching SQL, the exercise can be "write the query," with `test_code`
+executing it via `sqlite3` (stdlib) against a fixture and checking the
+result - the learner is never asked to write Python, Python is just
+what runs the check. Same idea for a regex checked via `re`, a config
+file checked by parsing it, or any other non-Python skill a Python (or
+JS) harness can mechanically verify. Don't default to "make them write
+a Python function" just because Python is the book's detected
+language - ask what skill the book is actually teaching first, then
+decide what harness proves it.
+
+**`short_answer`** is for a *discrete question with one right
+explanation* - use it when forcing code would be artificial busywork
+(a pure design tradeoff, a historical/motivational aside, a comparison
+of approaches with no natural artifact to build) **or** when the
+concept is fundamentally about interpretation rather than computation:
+what a result *means*, why it's true, what it looks like geometrically,
+what breaks if a condition fails. A blob can usually be *implemented*
+(compute the dot product, multiply the matrices) without that exercise
+ever testing whether the learner understands what the computed thing
+represents - e.g. "implement the dot product" tells you nothing about
+whether the learner knows a zero result means orthogonality, or why a
+zero determinant means no unique solution. Don't force those into code
+just because a plausible function signature exists; use `short_answer`
+(teach-back framing, see below) instead. When in doubt between
+`implementation` and `short_answer`, ask: does passing this exercise
+actually require understanding the interpretation, or just
 transcribing a formula? If the latter, prefer `short_answer`. This
 matters most in math-heavy books, where most concepts have *both* a
 computational side and an interpretive side - don't let every blob in
 such a book default to implementation just because each one technically
 has a formula to code. When you do use `short_answer`, prefer an
 applied/scenario question over pure recall.
+
+**`artifact`** is for producing, repairing, translating, or judging a
+*concrete but inherently non-executable* thing - the core reframe:
+"implementation" really means "produce a concrete artifact by applying
+the concept," and code is just the special case where that artifact
+happens to be executable. `artifact` is the non-executable case, graded
+the same way as `short_answer` (claude-graded against the book's own
+criteria, `reference_artifact` instead of `expected_answer`) but framed
+as "build/fix/convert/judge X," not "explain X." Reach for it whenever
+a concept's natural exercise is "produce something real" but nothing
+can mechanically check it the way `test_code` checks code - don't force
+it into a contrived function signature just to keep it in
+`implementation`, and don't flatten it into `short_answer`-as-prose
+either if there's a genuine artifact to produce. The categories below
+cover most of what shows up in practice - the first set is "build it
+from scratch," the second is a different cognitive mode (repair,
+translation, judgment) that's often more diagnostic than fresh
+production, since a learner can produce a correct-looking artifact by
+pattern-matching the book's own example without understanding why it's
+correct:
+
+*Build from scratch:*
+- **Manual worked derivation** - actually carrying out the procedure by
+  hand (solve the equation, compute the statistic from given data, work
+  the accounting entry, derive the proof step) rather than writing code
+  that does it. Pedagogically different from coding it: code can hide a
+  misunderstanding behind logic copied from a hint, typing out each step
+  directly exercises procedural fluency.
+- **Structured design artifacts** - a schema, an ER diagram, a system
+  architecture sketch (Mermaid/ASCII), a component-responsibility list,
+  a DDL statement. The book taught a design principle; the exercise is
+  "design something using it," not "explain the principle." Natural for
+  systems-design/database/architecture books.
+- **Applied writing** - a paragraph, email, or argument that actually
+  applies the specific technique just taught, not "explain the
+  technique." Natural for rhetoric/communication/writing books, which
+  otherwise have no implementation story at all.
+- **Declarative/configuration artifacts** - a regex, a config file, a
+  query, where the artifact itself is what's being taught and no
+  Python/JS harness naturally exists to check it (if one does, that's
+  `implementation` - see above).
+- **Case-based application** - given a new scenario, apply the book's
+  framework and produce a decision/plan with justification, not just
+  describe the framework. Natural for strategy/negotiation/ethics/law
+  books - this is where `artifact` for a non-technical book most
+  naturally lives, since these books are inherently about applying a
+  framework to situations, not computing anything.
+- **Constructed formal objects** - a proof, a syllogism, a truth table,
+  a labeled fallacy in a passage. Natural for logic/philosophy/discrete-
+  math books - checkable structure, but not runnable code.
+
+*Repair, translate, judge:*
+- **Critique/repair** - give a flawed artifact (a buggy-but-non-code
+  design, a broken argument, a proof with a subtle gap, a poorly
+  structured plan) and have the learner find and fix what's wrong.
+  Repairing a specific flaw requires knowing what it violates in a way
+  producing a correct-looking artifact from scratch doesn't always
+  require.
+- **Representation translation** - convert the concept from the
+  modality it was taught in into a different one: a word problem into
+  an equation, a state machine into a table, prose into a flowchart, a
+  formal proof into plain English (or the reverse). Rote copying
+  doesn't survive a change of representation, so it's a strong test the
+  underlying model actually transferred, not just the surface form.
+- **Construct the counterexample, not the solution** - instead of
+  solving a problem, construct an input that breaks a given claim, or a
+  case where a property fails. Flips the usual direction and tests
+  understanding of a concept's *boundaries*, not just its typical case.
+- **Predict, then verify** - state a prediction (a sign, an order of
+  magnitude, which of two outcomes) before doing the derivation/
+  calculation. Surfaces misconceptions before they get papered over by
+  the correct answer.
+- **Ordering/sequencing** - given shuffled steps of a process (algorithm
+  steps, a causal chain, order of operations), reconstruct the correct
+  order and justify the dependency. Directly probes whether the learner
+  understands *why* each step depends on the one before.
+- **Rank/compare candidates** - given two or three candidate solutions
+  to the same problem, rank them or pick the better one using the
+  book's own stated criteria, and justify why. Tests evaluative
+  judgment rather than production - a good fit where the book's actual
+  point is "here's what separates good from bad."
+
+*Where nothing digital can verify it:* books whose "hands-on" is
+physically real (cooking, a craft, a workout) have no verification path
+at all, code or otherwise. Don't invent a fake grading mechanism for
+these - use `short_answer` with a self-report framing ("describe what
+you did" + the existing reveal/self-assess fallback), not `artifact`.
+
+None of this needs a new grading mechanism beyond what already exists -
+`artifact` reuses the exact same claude-grading path as `short_answer`
+(`build_grading_prompt`, adaptive one-round follow-up, self-assess
+fallback). What's different is the prompt framing (produce/repair/
+translate/judge X, not explain X) and the reference field
+(`reference_artifact`, not `expected_answer` - see
+`exercise_reference_text()` in `app-engine/server.py`).
 
 ### 3. Write the exercise, grounded strictly in this book
 
@@ -287,7 +402,14 @@ concept, don't include it just because you generated it.
 For `implementation` exercises, write in the book's detected primary
 language (check `content.json`'s top-level `"language"` field - default
 to `"python"` if the book isn't language-specific; use `"javascript"` if
-the book is clearly JS-focused). You must produce:
+the book is clearly JS-focused) - or, if the book's actual skill is
+something a Python/JS harness can check rather than Python/JS itself
+(see "Decide exercise type per blob" above), `starter_code`/
+`reference_solution` hold that other skill's real syntax (a SQL string,
+a regex, a config block) as plainly as possible, with just enough
+Python/JS wrapper for `test_code` to run and check it - the harness
+language is scaffolding, not the point of the exercise. You must
+produce:
 - `prompt` - what to build, in one or two sentences.
 - `starter_code` - a stub with the right function signature, not a
   solution.
@@ -326,6 +448,15 @@ unfamiliar with it" - rather than a narrow recall question. Teach-back
 prompts are graded the same way as any other `short_answer` exercise;
 this is a matter of how you phrase `prompt`, not a different schema
 field.
+
+For `artifact` exercises, write `prompt` and `reference_artifact` (same
+role as `short_answer`'s `expected_answer` - the grounding reference for
+self-assessment and for `claude`-grading, never shown to the learner
+directly). Phrase `prompt` as an instruction to produce/repair/
+translate/judge something concrete (see the categories above), not as a
+question to answer - that framing difference is what actually
+distinguishes this from `short_answer` in the learner's experience,
+since both are graded through the identical mechanism.
 
 **Optionally, add `extra_questions`** (0-2, same object shape as
 `exercise` above, authored the same way per its own `type`) - but only

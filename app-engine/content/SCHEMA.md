@@ -28,7 +28,7 @@ The skill generates this file from the converted markdown; the engine
           "prerequisites": ["ch00-b03"],  // ids of blobs you should understand first (drives the knowledge graph)
 
           "exercise": {
-            "type": "implementation",      // or "short_answer"
+            "type": "implementation",      // or "short_answer" or "artifact"
 
             // --- implementation exercises ---
             "prompt": "What to build.",
@@ -41,9 +41,15 @@ The skill generates this file from the converted markdown; the engine
             ],
             "reference_solution": "def solve(...):\n    return ...\n",
 
-            // --- short_answer exercises (used only when a concept has no
-            // natural implementation - e.g. a design tradeoff) ---
-            "expected_answer": "The reference answer, shown after you self-assess."
+            // --- short_answer exercises (a discrete question with one
+            // right answer/explanation - used when forcing code would be
+            // artificial busywork, e.g. a pure design tradeoff) ---
+            "expected_answer": "The reference answer, shown after you self-assess.",
+
+            // --- artifact exercises (produce/repair/translate/judge a
+            // concrete but non-executable artifact - see SKILL.md's
+            // "Decide exercise type per blob" for the full criteria) ---
+            "reference_artifact": "The reference artifact/rubric, shown after you self-assess."
           },
 
           // Optional, 0-2 entries. Same shape as `exercise` (each is its
@@ -64,10 +70,23 @@ The skill generates this file from the converted markdown; the engine
 
 - `reading` and every exercise must be grounded in the chapter's own text -
   no outside knowledge, no generic best-practices that aren't in the book.
-- Default `exercise.type` is `"implementation"`. Use `"short_answer"` only
-  when forcing code would be artificial busywork (e.g. a pure tradeoff
-  discussion) - and even then prefer an applied, scenario-based question
-  over pure recall.
+- Default `exercise.type` is `"implementation"` - but that includes using
+  the book's detected language purely as a *harness* around a non-code
+  skill (a query, a regex, a config file) when that's what the book is
+  actually teaching, not literally writing idiomatic code in that
+  language for its own sake. Use `"short_answer"` for a discrete
+  question with one right answer/explanation when forcing code would be
+  artificial busywork. Use `"artifact"` when the concept's point is
+  producing, repairing, translating, or judging a concrete but
+  inherently non-executable thing (a design, a proof, applied writing,
+  a critique) - see SKILL.md's "Decide exercise type per blob" for the
+  full three-way decision and a taxonomy of `artifact` categories.
+  `short_answer` and `artifact` are graded the same way
+  (`build_grading_prompt`, claude-graded with a self-assess fallback);
+  the difference is prompt framing (explain X vs. produce/repair/
+  translate/judge X) and which reference field they use
+  (`expected_answer` vs. `reference_artifact` - see
+  `exercise_reference_text()` in `server.py`).
 - `test_code` must be self-contained: it imports from `solution.<ext>`
   (the file the learner's submission is written to) and exits non-zero on
   failure. No network calls. Prefer hardcoded input/output pairs for

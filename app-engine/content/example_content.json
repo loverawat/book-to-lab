@@ -68,6 +68,17 @@
             "prompt": "Given an unsorted list, why might binary_search return -1 or a wrong index even when the target is present? Answer in your own words before revealing.",
             "expected_answer": "Because binary search's halving step assumes elements to one side of the midpoint are all smaller (or larger); on unsorted data that assumption doesn't hold, so it can discard the half that actually contains the target, causing it to miss a present value or return an incorrect index."
           }
+        },
+        {
+          "id": "ch01-b04",
+          "concept": "Choosing a search strategy",
+          "reading": "Linear search works on any list and costs at most n comparisons. Binary search costs at most log2(n) comparisons but requires the list to already be sorted - and sorting itself costs more than a single search would. Which one is worth using depends on whether the list is already sorted and how many searches will be run against it.",
+          "prerequisites": ["ch01-b02", "ch01-b03"],
+          "exercise": {
+            "type": "artifact",
+            "prompt": "Produce a short decision rule (3-5 numbered steps, not prose paragraphs) that someone could follow to decide whether to use linear_search or binary_search for a given list and number of expected searches, grounded only in the tradeoffs this chapter actually describes.",
+            "reference_artifact": "1. Is the list already sorted? If no, go to step 2; if yes, go to step 3.\n2. Will more than one search be run against this list? If no, use linear_search (sorting costs more than the one search saves). If yes, sort once, then use binary_search for every search after that.\n3. Use binary_search directly - it's already sorted, so there's no extra cost to unlock its lower per-search cost."
+          }
         }
       ]
     }

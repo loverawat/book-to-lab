@@ -8,153 +8,59 @@ schedule. If you pick one up, do the work as a real commit/PR and then
 remove or update its entry here — don't leave a half-implemented version
 sitting alongside its own TODO.
 
-## Implementation exercises are narrower than they need to be
+## Implementation exercises are narrower than they need to be — done
 
-`test_code`/`starter_code`/`reference_solution` being written "in
-Python" doesn't require the *skill being tested* to be Python —
-`test_code` is just a harness and can shell out, use `sqlite3` (stdlib)
-to check a SQL query, use `re` to validate a regex, write/read a config
-file and assert on it, etc. Right now `SKILL.md` defaults every
-implementation exercise to literal Python code regardless of what the
-book actually teaches (see the linear algebra demo generating 8/8
-"implement a function" exercises — CLAUDE.md's design-decisions note on
-`short_answer` eligibility covers the fix already made for the
-interpretation-vs-computation half of this). Using Python purely as an
-execution harness for a non-Python skill needs no engine change, just
-generation guidance in `SKILL.md` recognizing when the book's actual
-skill isn't "write Python."
+`SKILL.md`'s "Decide exercise type per blob" is now a genuine three-way
+decision - `implementation` (default, including using the book's
+detected language purely as a *harness* around a non-Python/JS skill -
+a SQL query checked via `sqlite3`, a regex checked via `re`, when
+that's what the book is actually teaching), `short_answer` (a discrete
+question with one right explanation), and new **`artifact`** (produce/
+repair/translate/judge a concrete but inherently non-executable thing).
+`artifact` reuses `short_answer`'s exact grading mechanism
+(`build_grading_prompt`, self-assess fallback, `/api/grade-answer`) via
+a new `exercise_reference_text()` helper that reads `reference_artifact`
+instead of `expected_answer` - zero new grading machinery, only prompt
+framing and one field name differ. Threaded through every claude-graded
+path: grading, review variants, synthesis challenges, extra questions.
+Full taxonomy (manual derivation, structured design, applied writing,
+critique/repair, representation translation, counterexample
+construction, predict-then-verify, ordering, rank/compare, and the
+honest physical-action boundary) lives in `SKILL.md` itself now, not
+just here - see "Decide exercise type per blob".
 
-Separately, there's a real schema gap: exercises whose correct artifact
-is inherently non-executable (a system design, a schema/architecture
-decision, a diagram, a written spec) have no home except `short_answer`,
-which frames everything as "explain in prose" rather than "produce this
-concrete thing and get graded on whether it's right." Closing that would
-mean either a third exercise type (claude-graded, "build X" framing
-instead of "explain X") or loosening `short_answer` to explicitly cover
-"produce an artifact" prompts. Only worth doing once we hit concrete
-cases the Python-harness trick genuinely can't cover — try that first.
+**Verified two ways, not just written:**
+- Every claude-graded endpoint tested live against real `claude` calls
+  with `artifact`-type content: correct/incorrect grading, review-variant
+  generation (correctly produced a fresh scenario with `reference_artifact`
+  in the right shape), self-assess/reveal wording.
+- A real trial generation pass against `demo/linear-algebra-demo-book.epub`
+  - the same book that originally exposed the "8/8 implementation"
+  problem (see `CLAUDE.md`) - re-authored chapter by chapter under the
+  new three-way guidance, at the same blob granularity as the original.
+  Result: **4 implementation / 3 artifact / 1 short_answer** across 8
+  blobs (plus 2 typed `extra_questions`), not 8/8. Concrete examples
+  that actually landed: the vector-magnitude section as a manual
+  derivation (artifact), the determinant section as predict-then-verify
+  (artifact), the matrix-form-of-a-system section as representation
+  translation (artifact), an `AB ≠ BA` counterexample-construction as an
+  extra question. Every `test_code`/`reference_solution` pair was
+  executed and passed; every `short_answer`/`artifact` reference was
+  graded "correct" against itself; genuinely fresh wrong/right answers
+  (not copied from the reference) were submitted against two extra
+  questions and graded with specific, accurate feedback - including
+  correctly catching a subtly-wrong counterexample (the identity matrix,
+  which trivially commutes, missing the point of the exercise).
 
-The core reframe worth keeping: "implementation" really means "produce
-a concrete artifact by applying the concept," and code is just the
-special case where that artifact happens to be executable. Dropping
-"executable" as a requirement opens up categories that today have no
-real home (they'd all currently default to `short_answer`-as-prose, or
-get force-fit into Python code that doesn't test what matters):
-
-- **Manual worked derivation** — actually carrying out the procedure by
-  hand (solve the equation, compute the statistic from given data, work
-  the accounting entry, derive the proof step) rather than writing code
-  that does it. Pedagogically different from coding it: code can hide a
-  misunderstanding behind logic copied from a hint, typing out each step
-  directly exercises procedural fluency. Deterministically gradeable if
-  the final answer is a specific number/expression; claude-graded if
-  partial credit for the steps themselves matters.
-- **Structured design artifacts** — a schema, an ER diagram, a system
-  architecture sketch (Mermaid/ASCII), a component-responsibility list,
-  a DDL statement. The book taught a design principle; the exercise is
-  "design something using it," not "explain the principle." Natural for
-  systems-design/database/architecture books. Claude-graded against the
-  book's own stated criteria for a good design, same grounding rule as
-  everything else.
-- **Applied writing** — a paragraph, email, or argument that actually
-  applies the specific technique just taught, not "explain the
-  technique." Natural for rhetoric/communication/writing books, which
-  today have no implementation story at all (no code to write) - every
-  concept in that kind of book currently defaults to
-  `short_answer`-as-explanation, missing "learn by doing" for that whole
-  genre.
-- **Declarative/configuration artifacts** — a regex, a config file, a
-  query. Overlaps with the Python-harness idea above, but the
-  distinction matters: here the artifact itself (the regex, the SQL) is
-  what's being taught, and Python is only ever the test harness around
-  it, never something the learner is being taught.
-- **Case-based application** — given a new scenario, apply the book's
-  framework and produce a decision/plan with justification, not just
-  describe the framework. Natural for strategy/negotiation/ethics/law
-  books - this is where "implementation" for a non-technical book most
-  naturally lives, since these books are inherently about applying a
-  framework to situations, not computing anything.
-- **Constructed formal objects** — a proof, a syllogism, a truth table,
-  a labeled fallacy in a passage. Natural for logic/philosophy/discrete-
-  math books - checkable structure, but not runnable code.
-
-The categories above are all "build it from scratch." A second set
-tests a different cognitive mode - repair, translation, judgment - which
-is often more diagnostic than fresh production, since a learner can
-sometimes produce a correct-looking artifact by pattern-matching the
-book's own example without actually understanding why it's correct:
-
-- **Critique/repair** — give a flawed artifact (a buggy-but-non-code
-  design, a broken argument, a proof with a subtle gap, a poorly
-  structured plan) and have the learner find and fix what's wrong.
-  Repairing a specific flaw requires knowing what it violates in a way
-  that producing a correct-looking artifact from scratch doesn't always
-  require. Applies anywhere "structured design artifacts" or
-  "constructed formal objects" above apply.
-- **Representation translation** — convert the concept from the
-  modality it was taught in into a different one: a word problem into
-  an equation, a state machine into a table, prose into a flowchart, a
-  formal proof into plain English (or the reverse). The dual-coding
-  technique from learning science - rote copying doesn't survive a
-  change of representation, so it's a strong test that the underlying
-  model actually transferred, not just the surface form.
-- **Construct the counterexample, not the solution** — instead of
-  solving a problem, construct an input that breaks a given claim, or a
-  case where a property fails ("give an input where this algorithm gets
-  the wrong answer," "construct a case with zero determinant that isn't
-  obviously singular," "write a sentence committing this specific
-  fallacy"). Flips the usual direction and tests understanding of a
-  concept's *boundaries*, not just its typical case - often catches
-  shallow understanding a normal solve-it exercise wouldn't.
-- **Predict, then verify** — state a prediction (a sign, an order of
-  magnitude, which of two outcomes) before doing the derivation/
-  calculation, then reveal the actual result and compare. Standard
-  technique in physics/stats teaching for surfacing misconceptions
-  before they get papered over by the correct answer. Pairs naturally as
-  a two-part exercise on one blob - a concrete use case for "Authored
-  multi-question blobs" below.
-- **Ordering/sequencing** — given shuffled steps of a process (algorithm
-  steps, a causal chain, order of operations), reconstruct the correct
-  order and justify the dependency. Cheap to grade (compare the
-  sequence), and directly probes whether the learner understands *why*
-  each step depends on the one before - which is also exactly what the
-  prerequisite knowledge graph (see "Knowledge graph depth" below)
-  already encodes per blob. The graph could plausibly double as source
-  material for generating this exercise type, not just stay a read-only
-  browsing aid.
-- **Rank/compare candidates** — given two or three candidate solutions
-  to the same problem, rank them or pick the better one using the
-  book's own stated criteria, and justify why. Tests evaluative judgment
-  rather than production - a good fit where the book's actual point is
-  "here's what separates good from bad" rather than a procedure to
-  execute (design/writing/strategy books again).
-
-- **Where it genuinely can't go further** — books whose "hands-on" is
-  physically real (cooking, a craft, a workout) have no digital
-  verification path at all, code or otherwise. The honest move there
-  isn't inventing a fake grading mechanism, it's the same self-report
-  fallback `short_answer` already has ("I did it" / "I didn't") - a
-  legitimate exercise type for that case, not a gap to engineer around.
-
-None of this needs a new grading *mechanism* - deterministic where a
-harness can check it (derivations with a specific answer, config/query
-artifacts, an ordering task's exact sequence), claude-graded against
-book criteria otherwise (designs, applied writing, case decisions,
-proofs, repairs, translations, counterexamples, rankings), self-report
-where nothing else is possible (physical actions). What's actually new
-is the *prompt framing* recognizing "produce, repair, translate, or
-judge an artifact" as its own category, distinct from both "write
-runnable code" and "explain in prose" - which is exactly the
-third-type/loosened-`short_answer` gap described above.
-
-**Tradeoff to weigh before going further:** going beyond "shell out from
-Python" — adding real first-class support for other languages (Rust,
-Go, actual `.sql` files, etc.) via new `RUNNERS` entries in `server.py`
-— pulls against invariant 4 (zero required setup beyond pandoc +
-python3). JS support already made this tradeoff once (assumes `node` is
-on PATH), so there's precedent, but each new language is a toolchain
-assumption the user might not have, discovered only when they hit a
-book that needs it.
+**Still explicitly out of scope, by choice this round:** real
+first-class multi-language exercise runners (Rust, Go, actual `.sql`
+files) via new `RUNNERS` entries in `server.py` - that pulls against
+invariant 4 (zero required setup beyond pandoc + python3) and was kept
+as a separate, bigger tradeoff rather than bundled into this pass. JS
+support already made this tradeoff once (assumes `node` is on PATH), so
+there's precedent, but each new language is a toolchain assumption the
+user might not have, discovered only when they hit a book that needs
+it.
 
 ## Authored multi-question blobs — done
 

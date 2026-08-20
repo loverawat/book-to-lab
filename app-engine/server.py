@@ -340,6 +340,20 @@ def _extract_json_object(text):
     return None
 
 
+def exercise_reference_text(exercise):
+    """The claude-grounding reference field for any non-"implementation"
+    exercise type - "expected_answer" for short_answer (a discrete
+    answer), "reference_artifact" for artifact (a produced/repaired/
+    translated/judged artifact - see SKILL.md's "Decide exercise type
+    per blob"). Centralized here rather than inline-branched at every
+    claude-graded call site (grade-answer, review, synthesis, extra
+    questions) so those two field names only need to be known in one
+    place."""
+    if exercise.get("type") == "artifact":
+        return exercise.get("reference_artifact", "")
+    return exercise.get("expected_answer", "")
+
+
 def call_claude_json(prompt, timeout=120):
     """Returns (parsed_dict, None) on success, or (None, error_message)."""
     try:
@@ -356,10 +370,16 @@ def call_claude_json(prompt, timeout=120):
     return parsed, None
 
 
-def build_grading_prompt(book_title, excerpt, exercise_prompt, expected_answer, answer,
+def build_grading_prompt(book_title, excerpt, exercise_prompt, reference_text, answer,
                           follow_up_question=None, follow_up_answer=None):
+    """Shared by both short_answer (a discrete question/answer) and
+    artifact (produce/repair/translate/judge something concrete) exercise
+    types - see SKILL.md's "Decide exercise type per blob". Section
+    labels are deliberately type-neutral (TASK/REFERENCE/SUBMISSION, not
+    QUESTION/ANSWER) so this reads naturally for both rather than only
+    for a literal Q&A exchange."""
     base = textwrap.dedent(f"""
-        You are grading a learner's answer for the book "{book_title}".
+        You are grading a learner's submission for the book "{book_title}".
         Judge ONLY against the book excerpt below - no outside knowledge or
         general best practices beyond what this excerpt says. If the book's
         view differs from common convention, the book's view is correct here.
@@ -368,17 +388,17 @@ def build_grading_prompt(book_title, excerpt, exercise_prompt, expected_answer, 
         {excerpt}
         --- END EXCERPT ---
 
-        --- QUESTION ---
+        --- TASK ---
         {exercise_prompt}
-        --- END QUESTION ---
+        --- END TASK ---
 
-        --- REFERENCE ANSWER (for your grounding only; the learner never sees this wording) ---
-        {expected_answer}
-        --- END REFERENCE ANSWER ---
+        --- REFERENCE (for your grounding only; the learner never sees this wording) ---
+        {reference_text}
+        --- END REFERENCE ---
 
-        --- LEARNER'S ANSWER ---
+        --- LEARNER'S SUBMISSION ---
         {answer}
-        --- END LEARNER'S ANSWER ---
+        --- END LEARNER'S SUBMISSION ---
     """).strip()
 
     if follow_up_question is not None:
@@ -413,11 +433,12 @@ def build_grading_prompt(book_title, excerpt, exercise_prompt, expected_answer, 
 
 def build_variant_prompt(book_title, blob, language, gap_notes=None):
     exercise = blob["exercise"]
-    shape = (
-        '{"prompt": "...", "starter_code": "...", "test_code": "...", "reference_solution": "..."}'
-        if exercise["type"] == "implementation"
-        else '{"prompt": "...", "expected_answer": "..."}'
-    )
+    if exercise["type"] == "implementation":
+        shape = '{"prompt": "...", "starter_code": "...", "test_code": "...", "reference_solution": "..."}'
+    elif exercise["type"] == "artifact":
+        shape = '{"prompt": "...", "reference_artifact": "..."}'
+    else:
+        shape = '{"prompt": "...", "expected_answer": "..."}'
     gap_block = ""
     if gap_notes:
         joined_gaps = "\n".join(f"- {g}" for g in gap_notes)
@@ -483,12 +504,13 @@ def build_synthesis_prompt(book_title, blob_excerpts, language, gap_notes_by_con
         with $...$ inline or $$...$$ for display equations - it will be
         rendered, not other notation.
         Respond with ONLY a JSON object, no other text, no markdown fences:
-        {{"type": "implementation" or "short_answer",
-          "prompt": "what to build/answer, requiring combining these concepts together",
+        {{"type": "implementation" or "short_answer" or "artifact",
+          "prompt": "what to build/answer/produce, requiring combining these concepts together",
           "starter_code": "stub - only if type is implementation",
           "test_code": "self-contained test importing from solution.<ext> - only if type is implementation",
           "reference_solution": "only if type is implementation",
-          "expected_answer": "only if type is short_answer"}}
+          "expected_answer": "only if type is short_answer",
+          "reference_artifact": "only if type is artifact"}}
     """).strip()
 
 
@@ -633,7 +655,7 @@ class Handler(BaseHTTPRequestHandler):
                 )
             else:
                 # short-answer: self-assessed, see /api/self-assess
-                self._json({"error": "use /api/self-assess for short_answer exercises"}, 400)
+                self._json({"error": "use /api/self-assess or /api/grade-answer for short_answer/artifact exercises"}, 400)
                 return
 
             state = progress["blobs"].setdefault(blob_id, {"status": "available", "box": 1, "last_reviewed": 0})
@@ -694,7 +716,7 @@ class Handler(BaseHTTPRequestHandler):
 
             prompt = build_grading_prompt(
                 content.get("title", "this book"), blob.get("reading", ""),
-                exercise.get("prompt", ""), exercise.get("expected_answer", ""),
+                exercise.get("prompt", ""), exercise_reference_text(exercise),
                 answer, follow_up_question, follow_up_answer,
             )
             result, error = call_claude_json(prompt)
@@ -795,7 +817,7 @@ class Handler(BaseHTTPRequestHandler):
             else:
                 prompt = build_grading_prompt(
                     content.get("title", "this book"), blob.get("reading", ""),
-                    exercise.get("prompt", ""), exercise.get("expected_answer", ""),
+                    exercise.get("prompt", ""), exercise_reference_text(exercise),
                     body.get("answer", ""),
                 )
                 result, error = call_claude_json(prompt)
@@ -838,7 +860,7 @@ class Handler(BaseHTTPRequestHandler):
             else:
                 prompt = build_grading_prompt(
                     content.get("title", "this book"), challenge.get("_excerpt", ""),
-                    challenge.get("prompt", ""), challenge.get("expected_answer", ""),
+                    challenge.get("prompt", ""), exercise_reference_text(challenge),
                     body.get("answer", ""),
                 )
                 result, error = call_claude_json(prompt)
@@ -877,7 +899,7 @@ class Handler(BaseHTTPRequestHandler):
             else:
                 prompt = build_grading_prompt(
                     content.get("title", "this book"), blob.get("reading", ""),
-                    eq.get("prompt", ""), eq.get("expected_answer", ""), body.get("answer", ""),
+                    eq.get("prompt", ""), exercise_reference_text(eq), body.get("answer", ""),
                 )
                 result, error = call_claude_json(prompt)
                 if result is None:
