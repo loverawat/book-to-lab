@@ -40,6 +40,9 @@ body {
   background: var(--bg-alt);
   border-right: 1px solid var(--border);
   padding: 16px;
+  height: 100vh;
+  position: sticky;
+  top: 0;
   overflow-y: auto;
 }
 #book-title { font-weight: 600; margin-bottom: 12px; }
