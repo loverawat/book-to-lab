@@ -21,26 +21,50 @@ graph for any concept, several levels deep.
    PDF conversion is inherently less reliable than epub's - prefer epub
    when you have the choice.
 2. **Generates** a content pack for the book: each chapter broken into
-   small concept "blobs," each paired with either a hands-on
-   implementation exercise (default) or, only when code would be
-   artificial, an applied short-answer question - plus progressive
-   hints, a reference solution, and prerequisite links.
+   small concept "blobs," each paired with one primary exercise -
+   `implementation` by default (in the book's own language, or just as
+   a harness around a non-code skill - a SQL query checked by actually
+   running it, a regex checked against real strings - when that's what
+   the book is really teaching), `short_answer` for a discrete question
+   with one right explanation, or `artifact` for producing, repairing,
+   translating, or judging a concrete but non-executable thing (a
+   design, a proof, a piece of applied writing, a counterexample) -
+   plus progressive hints, a reference solution, and prerequisite
+   links. Some blobs also get 0-2 optional supplementary questions, and
+   where a concept is fundamentally about a process or transformation a
+   still image can't capture, a generated diagram or animation.
 3. **Runs** a local web app for that specific book: gated progression
    (finish the current exercise to unlock the next), a prerequisite
    knowledge graph per concept, and:
-   - **Claude-graded short answers** - type an answer, get a real verdict
-     and specific feedback grounded in the book, not just a self-check.
-     A "partially correct" verdict triggers one targeted follow-up
-     question probing exactly the gap, instead of a flat right/wrong.
+   - **Claude-graded answers** - type a response, get a real verdict and
+     specific feedback grounded in the book, not just a self-check
+     (covers both `short_answer` and `artifact` exercises). A "partially
+     correct" verdict triggers one targeted follow-up question probing
+     exactly the gap, instead of a flat right/wrong.
    - **Spaced review with fresh variants** - when a passed concept comes
      back for review, you get a newly generated variant (different
      inputs/scenario, same concept), not a replay of the exact exercise
      you already solved - so passing it again means something. A concept
      you struggled with (more than one attempt) comes back for review
-     sooner than one you got right immediately.
-   - **Synthesis challenges** - on demand, combine your 2-3 most
-     recently passed concepts into one exercise that requires using them
-     together, not just recalling each in isolation.
+     sooner than one you got right immediately, and if you missed an
+     optional extra question on a concept, the next variant specifically
+     re-probes that exact gap instead of just generically retesting it.
+   - **Synthesis challenges** - combine your 2-3 most recently passed
+     concepts into one exercise that requires using them together, not
+     just recalling each in isolation. Offered inline between blobs once
+     you've passed enough of them, or any time from the sidebar.
+   - **Extra (optional) questions** - some blobs carry 0-2 supplementary
+     questions beyond the one that gates progression. They never block
+     you - offered once the primary exercise is passed, skipping costs
+     nothing structurally - but getting one wrong pulls that concept's
+     next review sooner and, unlike a skip, records what you missed so
+     later review/synthesis exercises specifically target that gap.
+   - **Book images, and generated diagrams where they help** - a
+     relevant image the book itself shipped shows up in the reading
+     pane; where a concept is fundamentally about a process or
+     transformation a still image can't capture, generation can also
+     produce a diagram or animation - judgment-gated, not added to
+     every blob.
    - **Skip, reset, and shut down** from the sidebar - mark a concept
      known without redoing it (tracked separately from an actual pass),
      wipe a book's progress to start over, or stop the server, all
@@ -66,6 +90,11 @@ or other sources get mixed in, by design.
   skill. Conversion is scripted; chunking a chapter into concepts and
   writing exercises is done live, by Claude, because it genuinely
   requires reading comprehension - no script can do that part.
+- `scripts/check_dependencies.py` - Phase 0 preflight, run before
+  conversion starts: checks for `pandoc` (required) and `node`/`claude`
+  CLI (optional, depending on the book), and prints the right install
+  command for your platform if something's missing. Never installs
+  anything itself.
 - `scripts/convert_epub.py` - epub -> markdown + media, using only
   `pandoc` and the Python standard library.
 - `scripts/convert_pdf.py` - PDF -> markdown + media, using `pymupdf`.
@@ -101,15 +130,16 @@ lives.
 - `claude` CLI on your `PATH` and logged in (rides on your existing
   Claude Code login/subscription, not a separate API key) - needed for
   most of what makes this "implementation-focused" rather than a plain
-  quiz app: claude-graded short answers (with adaptive follow-up),
-  dynamic spaced-review variants, synthesis challenges, and the
-  optional "ask claude to review" button on code exercises. Without it:
-  implementation exercises still auto-grade via real tests, short
-  answers fall back to manual self-assessment (reveal + self-report),
-  spaced review falls back to replaying the stored exercise instead of
-  a fresh variant, and synthesis challenges return an error since
-  there's no fallback for those (nothing to synthesize without it).
-  Progress, hints, and the knowledge graph never need it either way.
+  quiz app: claude-graded `short_answer`/`artifact` answers (with
+  adaptive follow-up), extra-question grading, dynamic spaced-review
+  variants, synthesis challenges, and the optional "ask claude to
+  review" button on code exercises. Without it: `implementation`
+  exercises still auto-grade via real tests, `short_answer`/`artifact`
+  fall back to manual self-assessment (reveal + self-report), spaced
+  review falls back to replaying the stored exercise instead of a fresh
+  variant, and synthesis challenges/extra questions return an error
+  since there's no fallback for those. Progress, hints, and the
+  knowledge graph never need it either way.
 
 ## Install
 
@@ -209,11 +239,12 @@ and checks gating, hints, the knowledge graph, static serving, and the
 grading paths that don't need a live model call (running tests against
 real submitted code, self-assessment) - run it after any change to
 `server.py`. It deliberately does **not** call the claude-dependent
-endpoints (claude-graded short answers, dynamic review variants,
-synthesis challenges, the "ask claude to review" button) - those need
-a real `claude` CLI call, which would make the suite slow and
-non-deterministic. Verify those manually against a real book (or the
-worked example) after touching anything that builds their prompts.
+endpoints (claude-graded `short_answer`/`artifact` answers, claude-graded
+extra questions, dynamic review variants, synthesis challenges, the
+"ask claude to review" button) - those need a real `claude` CLI call,
+which would make the suite slow and non-deterministic. Verify those
+manually against a real book (or the worked example) after touching
+anything that builds their prompts.
 
 Three self-authored, public-domain demo epubs let you sanity-check the
 epub -> markdown + media conversion pipeline without needing a real
