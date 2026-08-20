@@ -168,6 +168,70 @@ math-transcription instruction.
 Manim (real math-animation quality) is still explicitly out of scope -
 see "Relaxing invariant 4" below, unchanged.
 
+## Grading only sees the current blob's reading, not its prerequisites
+
+Raised in conversation: the app is architecturally a *replacement* for
+reading the book, not a supplement - `build_grading_prompt`/
+`build_variant_prompt`/`build_synthesis_prompt` all explicitly instruct
+claude to judge/generate "ONLY against the book excerpt... no outside
+knowledge" (invariant 2). That's enforced for the *learner* by gating -
+by the time they reach blob N they've necessarily passed everything
+before it - but not for the *grader*. `/api/grade-answer`,
+`/api/review-submit`, `/api/extra-submit`, and `/api/review-due`'s
+variant generation all currently ground on only the *current* blob's
+own `reading`, not any prerequisite's - so if a good answer legitimately
+needs something established in an earlier blob and never restated in
+the current one, claude is grading with less context than the learner
+actually has. `build_synthesis_prompt` already gets this right (it
+explicitly combines multiple blobs' excerpts); the single-blob paths
+don't.
+
+**Design worked out, not yet built** (deliberately held back - "let me
+experience it first, then decide whether to fix it"):
+
+- New helper `prerequisite_excerpts(content, blob)` - `(concept,
+  reading)` pairs for each of the blob's *direct* `prerequisites`, in
+  order. Deliberately not the full transitive chain and not "every blob
+  passed so far" (which gating would technically allow) - `prerequisites`
+  is already curated, judgment-authored data (`SKILL.md`'s generation
+  guidance already says to "reach further back when a concept genuinely
+  depends on something from an earlier chapter"), so it's already the
+  deliberate answer to "what does this concept actually depend on,"
+  not just reading order. Reusing it is a natural fit; walking the full
+  graph or dumping full history would dilute the "ground ONLY in the
+  relevant excerpt" instruction with noise.
+- `build_grading_prompt` and `build_variant_prompt` gain an optional
+  `prerequisite_excerpts` parameter, rendered as a new section placed
+  *before* the main excerpt (not merged into it) - background context,
+  not competing with what's actually being tested. Ordering matters:
+  keep the main excerpt closest to the actual task, prerequisite
+  context further back, so it reads as "general background -> specific
+  focus -> what to do," not two sources of equal weight.
+- Four call sites updated: `/api/grade-answer`, `/api/review-submit`,
+  `/api/extra-submit`, `/api/review-due`. All already load `content`, so
+  it's just `prerequisite_excerpts(content, blob)` passed through.
+- Deliberately out of scope: `build_synthesis_prompt` - already grounds
+  in multiple blobs' excerpts at once (richer context than the paths
+  that actually have the gap), and pulling in prerequisites-of-
+  prerequisites across 2-3 combined blobs multiplies complexity for a
+  case that isn't where the problem shows up. Treat as a separate call
+  if it turns out to matter in practice.
+
+**Known limitation of the design as scoped, not something it tries to
+fix:** it passes each prerequisite's *entire* `reading`, not a
+relevance-filtered excerpt - `prerequisites` is a list of blob ids, so
+it's all-or-nothing at the blob level, not a pointer to a specific fact
+within one. This mostly doesn't matter in practice *because* blobs are
+already chunked to "roughly one idea per blob" (`SKILL.md`), so a
+prerequisite's `reading` is already small and single-concept - there's
+little to filter out. It would only bite if a specific prerequisite
+blob is poorly chunked (genuinely covers more than one idea) - that's a
+chunking-quality issue upstream, not something this fix should
+compensate for with its own filtering layer (a second `claude` call to
+pre-filter context, or asking the grading call to do double duty,
+would add real latency/cost for a case that's rare if chunking is done
+well).
+
 ## Relaxing invariant 4 (zero required setup beyond pandoc + python3)
 
 **Done, not open anymore:** the preflight-check, guided-install, and
